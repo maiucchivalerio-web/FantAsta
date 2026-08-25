@@ -491,15 +491,15 @@
 
         function applyRemoteRows(data) {
             data.forEach(row => {
-                if (row.id === 'fanta_listone' && row.dati) listone = row.dati;
-                if (row.id === 'fanta_favorites_map' && row.dati) favoritesMap = row.dati;
-                if (row.id === 'fanta_custom_values_map' && row.dati) customValuesMap = row.dati;
-                if (row.id === 'fanta_player_notes_map' && row.dati) playerNotesMap = row.dati;
-                if (row.id === 'fanta_player_tiers_map' && row.dati) playerTiersMap = row.dati;
-                if (row.id === 'fanta_hidden_sections' && row.dati) hiddenSections = row.dati;
-                if (row.id === 'fanta_custom_tiers_config' && row.dati) customTiersConfig = row.dati;
-                if (row.id === 'fanta_auctions_data' && row.dati) auctionsData = row.dati;
-                if (row.id === 'fanta_current_auction' && row.dati) currentAuctionKey = row.dati;
+                if (row.id === 'fanta_listone' && row.data) listone = row.data;
+                if (row.id === 'fanta_favorites_map' && row.data) favoritesMap = row.data;
+                if (row.id === 'fanta_custom_values_map' && row.data) customValuesMap = row.data;
+                if (row.id === 'fanta_player_notes_map' && row.data) playerNotesMap = row.data;
+                if (row.id === 'fanta_player_tiers_map' && row.data) playerTiersMap = row.data;
+                if (row.id === 'fanta_hidden_sections' && row.data) hiddenSections = row.data;
+                if (row.id === 'fanta_custom_tiers_config' && row.data) customTiersConfig = row.data;
+                if (row.id === 'fanta_auctions_data' && row.data) auctionsData = row.data;
+                if (row.id === 'fanta_current_auction' && row.data) currentAuctionKey = row.data;
             });
         }
 
@@ -564,15 +564,15 @@
                     return;
                 }
                 const payload = [
-                    { id: 'fanta_listone', dati: listone },
-                    { id: 'fanta_favorites_map', dati: favoritesMap },
-                    { id: 'fanta_custom_values_map', dati: customValuesMap },
-                    { id: 'fanta_player_notes_map', dati: playerNotesMap },
-                    { id: 'fanta_player_tiers_map', dati: playerTiersMap },
-                    { id: 'fanta_hidden_sections', dati: hiddenSections },
-                    { id: 'fanta_custom_tiers_config', dati: customTiersConfig },
-                    { id: 'fanta_auctions_data', dati: auctionsData },
-                    { id: 'fanta_current_auction', dati: currentAuctionKey }
+                    { id: 'fanta_listone', data: listone },
+                    { id: 'fanta_favorites_map', data: favoritesMap },
+                    { id: 'fanta_custom_values_map', data: customValuesMap },
+                    { id: 'fanta_player_notes_map', data: playerNotesMap },
+                    { id: 'fanta_player_tiers_map', data: playerTiersMap },
+                    { id: 'fanta_hidden_sections', data: hiddenSections },
+                    { id: 'fanta_custom_tiers_config', data: customTiersConfig },
+                    { id: 'fanta_auctions_data', data: auctionsData },
+                    { id: 'fanta_current_auction', data: currentAuctionKey }
                 ];
 
                 _applyingRemoteUpdate = true;
@@ -632,13 +632,13 @@
 
         function updateCustomValue(playerName, val) {
             customValuesMap[playerName] = val;
-            if (_supabase) _supabase.from('asta_data').upsert({ id: 'fanta_custom_values_map', dati: customValuesMap }, { onConflict: 'id' })
+            if (_supabase) _supabase.from('asta_data').upsert({ id: 'fanta_custom_values_map', data: customValuesMap }, { onConflict: 'id' })
                 .then(({ error }) => { if (error) showSyncStatus("❌ Salvataggio valore fallito: " + error.message, 'error'); });
         }
 
         function updatePlayerNote(playerName, val) {
             playerNotesMap[playerName] = val;
-            if (_supabase) _supabase.from('asta_data').upsert({ id: 'fanta_player_notes_map', dati: playerNotesMap }, { onConflict: 'id' })
+            if (_supabase) _supabase.from('asta_data').upsert({ id: 'fanta_player_notes_map', data: playerNotesMap }, { onConflict: 'id' })
                 .then(({ error }) => { if (error) showSyncStatus("❌ Salvataggio nota fallito: " + error.message, 'error'); });
         }
 
@@ -648,7 +648,7 @@
             } else {
                 playerTiersMap[playerName] = val;
             }
-            if (_supabase) _supabase.from('asta_data').upsert({ id: 'fanta_player_tiers_map', dati: playerTiersMap }, { onConflict: 'id' })
+            if (_supabase) _supabase.from('asta_data').upsert({ id: 'fanta_player_tiers_map', data: playerTiersMap }, { onConflict: 'id' })
                 .then(({ error }) => { if (error) showSyncStatus("❌ Salvataggio fascia fallito: " + error.message, 'error'); });
             renderFreeAgents();
         }
