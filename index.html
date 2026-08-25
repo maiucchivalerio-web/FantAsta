@@ -28,14 +28,25 @@
         .gk-cell:hover { filter: brightness(1.2); }
         .gk-cell.selected-pair { outline: 2px solid #38bdf8; outline-offset: -2px; background-color: rgba(56, 189, 248, 0.25) !important; }
 
-        .fl-header-team { background-color: #131b2e; border: 1px solid #1e293b; flex: 1; min-width: 0; }
+        .fl-header-team { background-color: #131b2e; border: 1px solid #1e293b; flex: 1 0 168px; min-width: 168px; }
         .fl-section-p { background-color: #c25e19; color: #ffffff; }
         .fl-section-d { background-color: #1e7e4a; color: #ffffff; }
         .fl-section-c { background-color: #1d4ed8; color: #ffffff; }
         .fl-section-a { background-color: #b91c1c; color: #ffffff; }
         .fl-player-card { background-color: #111827; border: 1px solid #1f2937; }
-        
-        .participant-card { flex: 1; min-width: 0; }
+
+        .participant-card { flex: 1 0 150px; min-width: 150px; }
+
+        /* Su schermi larghi le colonne possono tornare a riempire tutto lo spazio senza scroll */
+        @media (min-width: 1024px) {
+            .fl-header-team { flex: 1; min-width: 0; }
+            .participant-card { flex: 1; min-width: 0; }
+        }
+
+        .h-scroll-hint { display: none; }
+        @media (max-width: 1023px) {
+            .h-scroll-hint { display: flex; }
+        }
     </style>
 </head>
 <body class="h-screen w-screen flex flex-col overflow-hidden m-0 p-0">
@@ -212,7 +223,10 @@
                         <span class="text-xs text-slate-400">€</span>
                     </div>
                 </div>
-                <div id="teams-overview-grid" class="flex flex-row gap-2 w-full pb-0.5"></div>
+                <div class="h-scroll-hint items-center gap-1.5 text-[10px] text-slate-500 mb-1">
+                    <i>👉</i> Scorri lateralmente per vedere tutti i partecipanti
+                </div>
+                <div id="teams-overview-grid" class="flex flex-row gap-2 w-full pb-2 overflow-x-auto"></div>
             </div>
 
             <!-- Tabellone Rose e Reparti -->
@@ -226,7 +240,10 @@
                         <button onclick="toggleSection('ATT')" id="btn-toggle-ATT" class="bg-red-950/60 border border-red-600/40 text-red-300 px-2 py-0.5 rounded-lg font-bold transition">ATT: ON</button>
                     </div>
                 </div>
-                <div id="google-sheet-table" class="pb-1"></div>
+                <div class="h-scroll-hint items-center gap-1.5 text-[10px] text-slate-500 mb-1">
+                    <i>👉</i> Scorri lateralmente per vedere tutte le rose
+                </div>
+                <div id="google-sheet-table" class="pb-1 overflow-x-auto"></div>
             </div>
         </div>
 
