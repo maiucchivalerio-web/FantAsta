@@ -434,8 +434,7 @@
         // Configurazione Supabase
         const SUPABASE_URL = 'https://muiyobatwpcydcaaxplm.supabase.co';
         const SUPABASE_KEY = 'sb_publishable_5xa0J7kp00GHKhLLUy4-LQ_NNfEZIVk';
-        const { createClient } = supabase;
-        const _supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+        let _supabase = null;
 
         let listone = [];
         let favoritesMap = {};
@@ -469,11 +468,20 @@
         // Funzione per caricare i dati da Supabase all'avvio
         async function loadDataFromSupabase() {
             try {
+                if (!_supabase && window.supabase) {
+                    const { createClient } = window.supabase;
+                    _supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+                }
+                if (!_supabase) {
+                    console.error("Supabase non inizializzato correttamente.");
+                    renderAll();
+                    return;
+                }
+
                 const { data, error } = await _supabase.from('asta_data').select('*');
                 if (error) throw error;
                 
                 if (data && data.length > 0) {
-                    // Cerca i vari record salvati nel database
                     data.forEach(row => {
                         if (row.id === 'fanta_listone') listone = row.dati || [];
                         if (row.id === 'fanta_favorites_map') favoritesMap = row.dati || {};
@@ -492,22 +500,26 @@
             renderAll();
         }
 
-        // Funzione per salvare i dati su Supabase (sostituisce il vecchio localStorage)
+        // Funzione ottimizzata per salvare tutti i dati in batch con un'unica chiamata
         async function saveState() {
-            const records = [
-                { id: 'fanta_listone', dati: listone },
-                { id: 'fanta_favorites_map', dati: favoritesMap },
-                { id: 'fanta_custom_values_map', dati: customValuesMap },
-                { id: 'fanta_player_notes_map', dati: playerNotesMap },
-                { id: 'fanta_player_tiers_map', dati: playerTiersMap },
-                { id: 'fanta_hidden_sections', dati: hiddenSections },
-                { id: 'fanta_custom_tiers_config', dati: customTiersConfig },
-                { id: 'fanta_auctions_data', dati: auctionsData },
-                { id: 'fanta_current_auction', dati: currentAuctionKey }
-            ];
+            try {
+                if (!_supabase) return;
+                const payload = [
+                    { id: 'fanta_listone', dati: listone },
+                    { id: 'fanta_favorites_map', dati: favoritesMap },
+                    { id: 'fanta_custom_values_map', dati: customValuesMap },
+                    { id: 'fanta_player_notes_map', dati: playerNotesMap },
+                    { id: 'fanta_player_tiers_map', dati: playerTiersMap },
+                    { id: 'fanta_hidden_sections', dati: hiddenSections },
+                    { id: 'fanta_custom_tiers_config', dati: customTiersConfig },
+                    { id: 'fanta_auctions_data', dati: auctionsData },
+                    { id: 'fanta_current_auction', dati: currentAuctionKey }
+                ];
 
-            for (let record of records) {
-                await _supabase.from('asta_data').upsert(record);
+                const { error } = await _supabase.from('asta_data').upsert(payload);
+                if (error) console.error("Errore salvataggio batch:", error);
+            } catch (err) {
+                console.error("Eccezione durante saveState:", err);
             }
             renderAll();
         }
@@ -555,12 +567,12 @@
 
         function updateCustomValue(playerName, val) {
             customValuesMap[playerName] = val;
-            _supabase.from('asta_data').upsert({ id: 'fanta_custom_values_map', dati: customValuesMap });
+            if (_supabase) _supabase.from('asta_data').upsert({ id: 'fanta_custom_values_map', dati: customValuesMap });
         }
 
         function updatePlayerNote(playerName, val) {
             playerNotesMap[playerName] = val;
-            _supabase.from('asta_data').upsert({ id: 'fanta_player_notes_map', dati: playerNotesMap });
+            if (_supabase) _supabase.from('asta_data').upsert({ id: 'fanta_player_notes_map', dati: playerNotesMap });
         }
 
         function updatePlayerTier(playerName, val) {
@@ -569,7 +581,7 @@
             } else {
                 playerTiersMap[playerName] = val;
             }
-            _supabase.from('asta_data').upsert({ id: 'fanta_player_tiers_map', dati: playerTiersMap });
+            if (_supabase) _supabase.from('asta_data').upsert({ id: 'fanta_player_tiers_map', dati: playerTiersMap });
             renderFreeAgents();
         }
 
