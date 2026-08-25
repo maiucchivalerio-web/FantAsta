@@ -431,9 +431,9 @@
     </div>
 
     <script>
-        // Configurazione Supabase
+        // Configurazione Supabase aggiornata con la chiave anon corretta
         const SUPABASE_URL = 'https://muiyobatwpcydcaaxplm.supabase.co';
-        const SUPABASE_KEY = 'sb_publishable_5xa0J7kp00GHKhLLUy4-LQ_NNfEZIVk';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im11aXlvYmF0d3BjeWRjYWF4cGxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2NDExNDQsImV4cCI6MjEwMzIxNzE0NH0.Cb3H9ad21xOc8umoGSAE-_5j4EvjbsEWWgc0ZpULX5o';
         let _supabase = null;
 
         let listone = [];
@@ -483,25 +483,26 @@
                 
                 if (data && data.length > 0) {
                     data.forEach(row => {
-                        if (row.id === 'fanta_listone') listone = row.dati || [];
-                        if (row.id === 'fanta_favorites_map') favoritesMap = row.dati || {};
-                        if (row.id === 'fanta_custom_values_map') customValuesMap = row.dati || {};
-                        if (row.id === 'fanta_player_notes_map') playerNotesMap = row.dati || {};
-                        if (row.id === 'fanta_player_tiers_map') playerTiersMap = row.dati || {};
-                        if (row.id === 'fanta_hidden_sections') hiddenSections = row.dati || hiddenSections;
-                        if (row.id === 'fanta_custom_tiers_config') customTiersConfig = row.dati || customTiersConfig;
-                        if (row.id === 'fanta_auctions_data') auctionsData = row.dati || auctionsData;
-                        if (row.id === 'fanta_current_auction') currentAuctionKey = row.dati || currentAuctionKey;
+                        if (row.id === 'fanta_listone' && row.dati) listone = row.dati;
+                        if (row.id === 'fanta_favorites_map' && row.dati) favoritesMap = row.dati;
+                        if (row.id === 'fanta_custom_values_map' && row.dati) customValuesMap = row.dati;
+                        if (row.id === 'fanta_player_notes_map' && row.dati) playerNotesMap = row.dati;
+                        if (row.id === 'fanta_player_tiers_map' && row.dati) playerTiersMap = row.dati;
+                        if (row.id === 'fanta_hidden_sections' && row.dati) hiddenSections = row.dati;
+                        if (row.id === 'fanta_custom_tiers_config' && row.dati) customTiersConfig = row.dati;
+                        if (row.id === 'fanta_auctions_data' && row.dati) auctionsData = row.dati;
+                        if (row.id === 'fanta_current_auction' && row.dati) currentAuctionKey = row.dati;
                     });
                 }
             } catch (err) {
-                console.error("Errore caricamento da Supabase, uso fallback locale:", err);
+                console.error("Errore caricamento da Supabase:", err);
             }
             renderAll();
         }
 
-        // Funzione ottimizzata per salvare tutti i dati in batch con un'unica chiamata
+        // Funzione per salvare tutti i dati in batch su Supabase
         async function saveState() {
+            renderAll(); // Aggiorna subito l'interfaccia localmente
             try {
                 if (!_supabase) return;
                 const payload = [
@@ -517,11 +518,10 @@
                 ];
 
                 const { error } = await _supabase.from('asta_data').upsert(payload);
-                if (error) console.error("Errore salvataggio batch:", error);
+                if (error) console.error("Errore salvataggio batch su Supabase:", error);
             } catch (err) {
                 console.error("Eccezione durante saveState:", err);
             }
-            renderAll();
         }
 
         const gkTeams = ["Ata", "Bol", "Cag", "Com", "Emp", "Fio", "Gen", "Int", "Juv", "Laz", "Lec", "Mil", "Mon", "Nap", "Par", "Rom", "Tor", "Udi", "Ven", "Ver"];
