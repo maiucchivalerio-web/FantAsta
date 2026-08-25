@@ -47,6 +47,11 @@
         @media (max-width: 1023px) {
             .h-scroll-hint { display: flex; }
         }
+
+        .fase-btn { transition: all .15s ease; }
+        .fase-btn.active-settembre { background: linear-gradient(135deg, #4f46e5, #3b82f6); color: #fff; box-shadow: 0 4px 12px rgba(59,130,246,.4); }
+        .fase-btn.active-riparazione { background: linear-gradient(135deg, #ea580c, #b91c1c); color: #fff; box-shadow: 0 4px 12px rgba(234,88,12,.4); }
+        .locked-badge { background: rgba(100,116,139,.15); border: 1px solid rgba(100,116,139,.4); color: #cbd5e1; }
     </style>
 </head>
 <body class="h-screen w-screen flex flex-col overflow-hidden m-0 p-0">
@@ -58,8 +63,8 @@
     <header id="site-header" class="bg-[#0f172a] border-b border-slate-800 z-40 shadow-xl flex-shrink-0 fixed top-0 left-0 right-0">
         <div class="w-full px-4 sm:px-6">
             <div class="flex flex-col lg:flex-row items-center justify-between py-2 gap-2">
-                
-                <div class="flex items-center justify-between w-full lg:w-auto gap-4">
+
+                <div class="flex items-center justify-between w-full lg:w-auto gap-4 flex-wrap">
                     <div class="flex items-center space-x-3">
                         <div class="bg-gradient-to-tr from-amber-500 via-yellow-500 to-amber-600 p-2 rounded-xl text-white shadow-xl flex items-center justify-center ring-2 ring-amber-400/30">
                             <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -71,17 +76,29 @@
                                 <h1 class="font-black text-base text-white tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">FantAsta</h1>
                                 <span class="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-[9px] font-bold px-1.5 py-0.5 rounded-full">PRO</span>
                             </div>
-                            <p class="text-[10px] text-slate-400 font-medium tracking-wide">Stagione 2026/2027</p>
+                            <p class="text-[10px] text-slate-400 font-medium tracking-wide">Archivio Multi-Stagione</p>
                         </div>
                     </div>
 
                     <div class="flex items-center gap-1.5 bg-slate-900/90 border border-slate-700/80 px-2.5 py-1 rounded-xl shadow-inner">
-                        <span class="text-[9px] text-slate-400 uppercase font-extrabold tracking-wider">Slot:</span>
-                        <select id="auction-slot-select" onchange="switchAuctionSlot(this.value)" class="bg-transparent text-indigo-300 font-bold text-xs focus:outline-none cursor-pointer">
+                        <span class="text-[9px] text-slate-400 uppercase font-extrabold tracking-wider">Lega:</span>
+                        <select id="lega-select" onchange="switchLega(this.value)" class="bg-transparent text-indigo-300 font-bold text-xs focus:outline-none cursor-pointer max-w-[110px]">
                         </select>
-                        <button onclick="openNewSlotModal()" class="text-indigo-400 hover:text-indigo-300 font-bold px-1 text-sm transition transform hover:scale-110" title="Crea Nuovo Slot Asta">➕</button>
+                        <button onclick="openNewLegaModal()" class="text-indigo-400 hover:text-indigo-300 font-bold px-1 text-sm transition transform hover:scale-110" title="Crea Nuova Lega">➕</button>
                         <button onclick="openAccessModal()" class="text-emerald-400 hover:text-emerald-300 font-bold px-1 text-sm transition transform hover:scale-110" title="Password / Accesso Lega">🔑</button>
-                        <button onclick="deleteCurrentSlot()" class="text-red-400 hover:text-red-300 font-bold px-1 text-sm transition transform hover:scale-110" title="Elimina Slot Attuale">🗑️</button>
+                        <button onclick="deleteCurrentLega()" class="text-red-400 hover:text-red-300 font-bold px-1 text-sm transition transform hover:scale-110" title="Elimina Lega Attuale">🗑️</button>
+                    </div>
+
+                    <div class="flex items-center gap-1.5 bg-slate-900/90 border border-slate-700/80 px-2.5 py-1 rounded-xl shadow-inner">
+                        <span class="text-[9px] text-slate-400 uppercase font-extrabold tracking-wider">Anno:</span>
+                        <select id="anno-select" onchange="switchAnno(this.value)" class="bg-transparent text-amber-300 font-bold text-xs focus:outline-none cursor-pointer max-w-[80px]">
+                        </select>
+                        <button onclick="openNewAnnoModal()" class="text-amber-400 hover:text-amber-300 font-bold px-1 text-sm transition transform hover:scale-110" title="Crea Nuovo Anno">➕</button>
+                    </div>
+
+                    <div class="flex items-center gap-1 bg-slate-950/60 p-1 rounded-xl border border-slate-800">
+                        <button id="fase-btn-settembre" onclick="switchFase('settembre')" class="fase-btn px-2.5 py-1 rounded-lg text-[11px] font-bold text-slate-400 whitespace-nowrap">🗓️ Settembre</button>
+                        <button id="fase-btn-riparazione" onclick="switchFase('riparazione')" class="fase-btn px-2.5 py-1 rounded-lg text-[11px] font-bold text-slate-400 whitespace-nowrap">🔧 Riparazione</button>
                     </div>
                 </div>
 
@@ -105,12 +122,21 @@
                 </div>
 
                 <div class="flex items-center gap-2 w-full lg:w-auto justify-end flex-wrap">
-                    <label class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition cursor-pointer shadow-lg shadow-indigo-600/20">
+                    <label id="import-excel-label" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition cursor-pointer shadow-lg shadow-indigo-600/20">
                         📁 Import Excel
                         <input type="file" id="file-input" accept=".xlsx, .xls, .csv" class="hidden" onchange="importListoneFile(event)">
                     </label>
+                    <span id="listone-locked-badge" class="hidden locked-badge text-xs font-semibold px-3 py-1.5 rounded-xl items-center gap-1.5" title="Clicca per sbloccare (richiede conferma)" onclick="unlockCurrentListone()">
+                        🔒 Listone Bloccato
+                    </span>
+                    <button id="lock-listone-btn" onclick="lockCurrentListone()" class="hidden bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold px-3 py-1.5 rounded-xl items-center gap-1.5 transition shadow-lg" title="Blocca per sempre il listone di questa fase">
+                        🔒 Blocca Listone
+                    </button>
                     <button onclick="exportToCSV()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition shadow-lg shadow-emerald-600/20">
                         📥 Export
+                    </button>
+                    <button onclick="exportForLegheFantacalcio()" class="bg-teal-700 hover:bg-teal-600 text-white text-xs font-semibold px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition shadow-lg" title="Export generico compatibile con l'importazione rose di Leghe Fantacalcio">
+                        📤 Export per Lega
                     </button>
                     <button onclick="openConfigModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold px-2.5 py-1.5 rounded-xl transition shadow border border-slate-700">
                         ⚙️ Impostazioni
@@ -125,6 +151,15 @@
 
         <!-- TAB 1: ASTA LIVE & CREDITI -->
         <div id="view-auction" class="space-y-4 pb-4">
+
+            <!-- Pannello Giocatori Scomparsi dal Listone (solo in fase Riparazione) -->
+            <div id="delisted-panel" class="hidden bg-red-950/40 border border-red-600/40 rounded-2xl p-4 space-y-2.5">
+                <h3 class="text-xs font-bold text-red-300 uppercase tracking-wider flex items-center gap-1.5">
+                    🚨 Giocatori non più nel listone di Riparazione — vanno svincolati (rimborso 100%)
+                </h3>
+                <div id="delisted-list" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-2"></div>
+            </div>
+
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
                 <!-- Classifica Crediti Partecipanti -->
                 <div class="lg:col-span-3 bg-slate-900 border border-slate-800 rounded-2xl p-3.5 shadow-xl flex flex-col justify-between lg:sticky lg:top-4">
@@ -147,11 +182,11 @@
                             🎲 Pesca
                         </button>
                     </div>
-                    
+
                     <form id="assign-form" onsubmit="handleAssign(event)" class="space-y-3">
                         <div class="relative z-50">
                             <label class="block text-[11px] font-bold text-indigo-400 uppercase tracking-wider mb-1">1. Cerca e Seleziona Giocatore</label>
-                            <input type="text" id="input-player" autocomplete="off" required placeholder="Es. Retegui, Cambiaghi..." 
+                            <input type="text" id="input-player" autocomplete="off" required placeholder="Es. Retegui, Cambiaghi..."
                                 oninput="handleSearch(this.value)" onfocus="handleSearch(this.value)"
                                 class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500 font-medium text-xs">
                             <div id="suggestions-box" class="absolute left-0 right-0 top-full mt-1.5 bg-slate-800 border-2 border-indigo-500 rounded-xl shadow-2xl max-h-60 overflow-y-auto hidden z-50 divide-y divide-slate-700"></div>
@@ -170,7 +205,7 @@
                                 </div>
                                 <div>
                                     <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Squadra Club</label>
-                                    <input type="text" id="input-club" disabled placeholder="Es. Bologna" 
+                                    <input type="text" id="input-club" disabled placeholder="Es. Bologna"
                                         class="w-full bg-slate-800/60 border border-slate-700 rounded-xl px-2.5 py-1.5 text-slate-300 text-xs">
                                 </div>
                                 <div>
@@ -200,7 +235,7 @@
                 <div class="lg:col-span-3 bg-slate-900 border border-slate-800 rounded-2xl p-3.5 shadow-xl flex flex-col justify-between lg:sticky lg:top-4">
                     <div class="flex justify-between items-center mb-2 border-b border-slate-800 pb-1.5 flex-shrink-0">
                         <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                            📋 Storico Acquisti
+                            📋 Storico <span id="history-scope-label">Acquisti</span>
                         </h3>
                         <span id="history-count-badge" class="text-[10px] bg-slate-800 text-indigo-300 px-1.5 py-0.5 rounded-full font-mono">0</span>
                     </div>
@@ -218,7 +253,7 @@
                     </h2>
                     <div class="flex items-center gap-2 bg-slate-800/90 border border-slate-700 px-2.5 py-1 rounded-xl">
                         <span class="text-[11px] text-amber-300 font-bold whitespace-nowrap">Simula Rilancio:</span>
-                        <input type="number" id="sim-bid-price" min="1" value="10" oninput="renderTeamsOverview()" placeholder="Prezzo..." 
+                        <input type="number" id="sim-bid-price" min="1" value="10" oninput="renderTeamsOverview()" placeholder="Prezzo..."
                             class="w-16 bg-slate-900 border border-slate-600 rounded-lg px-2 py-0.5 text-right font-mono font-bold text-emerald-400 text-xs focus:outline-none focus:border-indigo-500">
                         <span class="text-xs text-slate-400">€</span>
                     </div>
@@ -263,7 +298,7 @@
                 </div>
 
                 <div class="flex flex-wrap items-center gap-2 pt-1">
-                    <input type="text" id="fa-search-input" oninput="renderFreeAgents()" placeholder="🔍 Cerca nome..." 
+                    <input type="text" id="fa-search-input" oninput="renderFreeAgents()" placeholder="🔍 Cerca nome..."
                         class="bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 min-w-[130px] flex-1">
                     <select id="fa-role-filter" onchange="renderFreeAgents()" class="bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-semibold">
                         <option value="ALL">Tutti i Ruoli</option>
@@ -353,9 +388,9 @@
     <div id="access-modal" class="fixed inset-0 bg-black/80 hidden items-center justify-center p-4 z-50 backdrop-blur-sm">
         <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-5 space-y-3 shadow-2xl">
             <h3 class="text-sm font-bold text-white">🔑 Accesso e Condivisione Lega</h3>
-            <p class="text-xs text-slate-400">Inserisci o comunica la chiave di accesso/password di questa lega per consentire ad altri partecipanti di collegarsi e visualizzare/modificare in diretta.</p>
+            <p class="text-xs text-slate-400">Inserisci o comunica la chiave di accesso/password di questa lega per consentire ad altri partecipanti di collegarsi e visualizzare/modificare in diretta. Vale per tutti gli anni e le fasi di questa lega.</p>
             <div>
-                <label class="block text-xs text-slate-300 mb-1 font-semibold">Nome Slot / Lega</label>
+                <label class="block text-xs text-slate-300 mb-1 font-semibold">Nome Lega</label>
                 <input type="text" id="access-slot-name" disabled class="w-full bg-slate-800/60 border border-slate-700 rounded-xl px-3 py-1.5 text-slate-300 text-xs font-mono">
             </div>
             <div>
@@ -374,7 +409,7 @@
         <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-5 space-y-3 shadow-2xl max-h-[90vh] overflow-y-auto">
             <h3 class="text-sm font-bold text-white">🏷️ Configura Nomi, Colori e Ordine delle Fasce</h3>
             <p class="text-xs text-slate-400">Modifica i nomi, scegli un colore identificativo per ciascuna fascia e gestiscine l'ordine.</p>
-            
+
             <div id="tiers-config-list" class="space-y-2"></div>
 
             <div class="flex gap-2 pt-1 items-center">
@@ -389,10 +424,11 @@
         </div>
     </div>
 
-    <!-- Modal Configurazione Lega & Slot -->
+    <!-- Modal Configurazione Lega -->
     <div id="config-modal" class="fixed inset-0 bg-black/80 hidden items-center justify-center p-4 z-50 backdrop-blur-sm">
         <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-5 space-y-3 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <h3 class="text-sm font-bold text-white">⚙️ Impostazioni Lega & Slot (<span id="modal-slot-name"></span>)</h3>
+            <h3 class="text-sm font-bold text-white">⚙️ Impostazioni Lega (<span id="modal-slot-name"></span>)</h3>
+            <p class="text-[11px] text-slate-500">Queste impostazioni (budget, manager, slot ruolo) valgono per tutti gli anni e le fasi di questa lega.</p>
             <div>
                 <label class="block text-xs text-slate-300 mb-1 font-semibold">Budget Iniziale</label>
                 <input type="number" id="cfg-budget" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-white font-mono text-xs">
@@ -401,7 +437,7 @@
                 <label class="block text-xs text-slate-300 mb-1 font-semibold">Nomi Partecipanti (separati da virgola)</label>
                 <textarea id="cfg-managers" rows="2" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-white text-xs"></textarea>
             </div>
-            
+
             <div class="border-t border-slate-800 pt-2.5 space-y-2">
                 <label class="block text-xs font-bold text-indigo-400 uppercase tracking-wider">Slot per Ruolo (per ogni rosa)</label>
                 <div class="grid grid-cols-2 gap-2.5">
@@ -431,13 +467,13 @@
         </div>
     </div>
 
-    <!-- Modal Crea Nuovo Slot Asta -->
+    <!-- Modal Crea Nuova Lega -->
     <div id="new-slot-modal" class="fixed inset-0 bg-black/80 hidden items-center justify-center p-4 z-50 backdrop-blur-sm">
         <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-5 space-y-3 shadow-2xl">
-            <h3 class="text-sm font-bold text-white">➕ Crea Nuovo Slot Asta</h3>
+            <h3 class="text-sm font-bold text-white">➕ Crea Nuova Lega</h3>
             <div>
                 <label class="block text-xs text-slate-300 mb-1 font-semibold">Nome Lega / Fantacalcio</label>
-                <input type="text" id="new-slot-name-input" placeholder="Es. Pace Ar Cazzo 2026" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-white text-xs">
+                <input type="text" id="new-slot-name-input" placeholder="Es. Pace Ar Cazzo" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-white text-xs">
             </div>
             <div>
                 <label class="block text-xs text-slate-300 mb-1 font-semibold">Password / Chiave d'accesso (Opzionale)</label>
@@ -445,7 +481,23 @@
             </div>
             <div class="flex justify-end gap-2 pt-2">
                 <button onclick="closeNewSlotModal()" class="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 rounded-xl text-slate-300">Annulla</button>
-                <button onclick="createNewSlot()" class="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 rounded-xl text-white font-bold shadow">Crea Slot</button>
+                <button onclick="createNewSlot()" class="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 rounded-xl text-white font-bold shadow">Crea Lega</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Crea Nuovo Anno -->
+    <div id="new-anno-modal" class="fixed inset-0 bg-black/80 hidden items-center justify-center p-4 z-50 backdrop-blur-sm">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-5 space-y-3 shadow-2xl">
+            <h3 class="text-sm font-bold text-white">📅 Crea Nuovo Anno</h3>
+            <p class="text-xs text-slate-400">Aggiunge un nuovo anno a questa lega, con Asta di Settembre e Asta di Riparazione vuote. Gli anni precedenti restano archiviati come sono.</p>
+            <div>
+                <label class="block text-xs text-slate-300 mb-1 font-semibold">Etichetta Anno</label>
+                <input type="text" id="new-anno-input" placeholder="Es. 2027" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-white text-xs">
+            </div>
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="closeNewAnnoModal()" class="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 rounded-xl text-slate-300">Annulla</button>
+                <button onclick="createNewAnno()" class="px-3 py-1.5 text-xs bg-amber-600 hover:bg-amber-500 rounded-xl text-white font-bold shadow">Crea Anno</button>
             </div>
         </div>
     </div>
@@ -456,7 +508,7 @@
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im11aXlvYmF0d3BjeWRjYWF4cGxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2NDExNDQsImV4cCI6MjEwMzIxNzE0NH0.Cb3H9ad21xOc8umoGSAE-_5j4EvjbsEWWgc0ZpULX5o';
         let _supabase = null;
 
-        let listone = [];
+        // --- Dati "personali" globali (preferiti/note/fasce) condivisi tra tutte le leghe/anni/fasi ---
         let favoritesMap = {};
         let customValuesMap = {};
         let playerNotesMap = {};
@@ -471,7 +523,18 @@
             { name: "Fascia 5", color: "#64748b" }
         ];
 
-        let auctionsData = {
+        // --- Nuovo modello dati: Lega -> Anno -> Fase (settembre / riparazione) ---
+        function nuovaFaseVuota() {
+            return { listone: [], listoneLocked: false, purchases: [] };
+        }
+        function nuovaFaseRiparazioneVuota() {
+            return { listone: [], listoneLocked: false, purchases: [], releases: [] };
+        }
+        function nuovoAnnoVuoto() {
+            return { fasi: { settembre: nuovaFaseVuota(), riparazione: nuovaFaseRiparazioneVuota() } };
+        }
+
+        let leghe = {
             "Pace Ar Cazzo": {
                 password: "",
                 config: {
@@ -479,13 +542,49 @@
                     managers: ['Vale', 'Riccardo', 'Leo', 'Gabriel', 'Matteo t', 'Grinta', 'Baldo', 'Nikto'],
                     slots: { POR: 3, DIF: 8, CEN: 8, ATT: 6 }
                 },
-                purchases: []
+                anni: { "2026": nuovoAnnoVuoto() }
             }
         };
 
-        let currentAuctionKey = "Pace Ar Cazzo";
+        let currentLegaKey = "Pace Ar Cazzo";
+        let currentAnno = "2026";
+        let currentFase = "settembre"; // 'settembre' | 'riparazione'
+
         let _realtimeChannel = null;
         let _applyingRemoteUpdate = false;
+
+        // --- Accessor helper per il modello Lega -> Anno -> Fase ---
+        function getLega() { return leghe[currentLegaKey]; }
+        function getAnnoObj() { return getLega().anni[currentAnno]; }
+        function getFaseObj(faseKey) { return getAnnoObj().fasi[faseKey || currentFase]; }
+        function getListone() { return getFaseObj().listone; }
+        function getConfig() { return getLega().config; }
+
+        function getReleasedSettembreIds() {
+            const rip = getFaseObj('riparazione');
+            return new Set((rip.releases || []).map(r => r.purchaseId));
+        }
+
+        // Rosa/crediti effettivi nella fase corrente (in Riparazione = Settembre non svincolati + nuovi acquisti Riparazione)
+        function getEffectivePurchases() {
+            const sett = getFaseObj('settembre');
+            if (currentFase === 'settembre') return sett.purchases;
+            const releasedIds = getReleasedSettembreIds();
+            const rip = getFaseObj('riparazione');
+            const activeSettembre = sett.purchases.filter(p => !releasedIds.has(p.id));
+            return [...activeSettembre, ...rip.purchases];
+        }
+
+        // Giocatori acquistati a Settembre che non compaiono più nel listone di Riparazione: vanno svincolati per forza (100%)
+        function getDelistedPurchasedPlayers() {
+            if (currentFase !== 'riparazione') return [];
+            const sett = getFaseObj('settembre');
+            const rip = getFaseObj('riparazione');
+            if (!rip.listone || rip.listone.length === 0) return [];
+            const ripNames = new Set(rip.listone.map(p => p.name.toLowerCase()));
+            const releasedIds = getReleasedSettembreIds();
+            return sett.purchases.filter(p => !releasedIds.has(p.id) && !ripNames.has(p.player.toLowerCase()));
+        }
 
         // --- Banner di stato sincronizzazione: rende visibili gli errori invece di nasconderli in console ---
         let _syncBannerTimeout = null;
@@ -506,18 +605,62 @@
             }
         }
 
+        // Converte i vecchi dati (pre Lega/Anno/Fase) nella nuova struttura, senza perdere nulla
+        function migrateLegacyToLeghe(oldAuctionsData, oldListone) {
+            const migrated = {};
+            Object.keys(oldAuctionsData).forEach(key => {
+                const old = oldAuctionsData[key];
+                migrated[key] = {
+                    password: old.password || '',
+                    config: old.config,
+                    anni: {
+                        "2026": {
+                            fasi: {
+                                settembre: { listone: oldListone || [], listoneLocked: false, purchases: old.purchases || [] },
+                                riparazione: nuovaFaseRiparazioneVuota()
+                            }
+                        }
+                    }
+                };
+            });
+            return migrated;
+        }
+
         function applyRemoteRows(data) {
+            let legacyAuctionsData = null;
+            let legacyListone = null;
+            let foundModernLeghe = false;
+
             data.forEach(row => {
-                if (row.id === 'fanta_listone' && row.data) listone = row.data;
+                if (row.id === 'fanta_leghe' && row.data) { leghe = row.data; foundModernLeghe = true; }
+                if (row.id === 'fanta_current_lega' && row.data) currentLegaKey = row.data;
+                if (row.id === 'fanta_current_anno' && row.data) currentAnno = row.data;
+                if (row.id === 'fanta_current_fase' && row.data) currentFase = row.data;
+
                 if (row.id === 'fanta_favorites_map' && row.data) favoritesMap = row.data;
                 if (row.id === 'fanta_custom_values_map' && row.data) customValuesMap = row.data;
                 if (row.id === 'fanta_player_notes_map' && row.data) playerNotesMap = row.data;
                 if (row.id === 'fanta_player_tiers_map' && row.data) playerTiersMap = row.data;
                 if (row.id === 'fanta_hidden_sections' && row.data) hiddenSections = row.data;
                 if (row.id === 'fanta_custom_tiers_config' && row.data) customTiersConfig = row.data;
-                if (row.id === 'fanta_auctions_data' && row.data) auctionsData = row.data;
-                if (row.id === 'fanta_current_auction' && row.data) currentAuctionKey = row.data;
+
+                // Dati del vecchio formato (prima della struttura Lega -> Anno -> Fase), usati solo per la migrazione
+                if (row.id === 'fanta_auctions_data' && row.data) legacyAuctionsData = row.data;
+                if (row.id === 'fanta_listone' && row.data) legacyListone = row.data;
             });
+
+            if (!foundModernLeghe && legacyAuctionsData) {
+                leghe = migrateLegacyToLeghe(legacyAuctionsData, legacyListone || []);
+                currentLegaKey = Object.keys(leghe)[0];
+                currentAnno = Object.keys(leghe[currentLegaKey].anni)[0];
+                currentFase = 'settembre';
+                showSyncStatus("🔄 Dati precedenti convertiti automaticamente nella nuova struttura Lega → Anno → Fase.", 'info');
+            }
+
+            // Sicurezza: se lega/anno/fase correnti non esistono più, riallinea su qualcosa di valido
+            if (!leghe[currentLegaKey]) currentLegaKey = Object.keys(leghe)[0];
+            if (!leghe[currentLegaKey].anni[currentAnno]) currentAnno = Object.keys(leghe[currentLegaKey].anni)[0];
+            if (currentFase !== 'settembre' && currentFase !== 'riparazione') currentFase = 'settembre';
         }
 
         // Funzione per caricare i dati da Supabase all'avvio
@@ -581,15 +724,16 @@
                     return;
                 }
                 const payload = [
-                    { id: 'fanta_listone', data: listone },
+                    { id: 'fanta_leghe', data: leghe },
+                    { id: 'fanta_current_lega', data: currentLegaKey },
+                    { id: 'fanta_current_anno', data: currentAnno },
+                    { id: 'fanta_current_fase', data: currentFase },
                     { id: 'fanta_favorites_map', data: favoritesMap },
                     { id: 'fanta_custom_values_map', data: customValuesMap },
                     { id: 'fanta_player_notes_map', data: playerNotesMap },
                     { id: 'fanta_player_tiers_map', data: playerTiersMap },
                     { id: 'fanta_hidden_sections', data: hiddenSections },
-                    { id: 'fanta_custom_tiers_config', data: customTiersConfig },
-                    { id: 'fanta_auctions_data', data: auctionsData },
-                    { id: 'fanta_current_auction', data: currentAuctionKey }
+                    { id: 'fanta_custom_tiers_config', data: customTiersConfig }
                 ];
 
                 _applyingRemoteUpdate = true;
@@ -671,8 +815,8 @@
         }
 
         function openAccessModal() {
-            document.getElementById('access-slot-name').value = currentAuctionKey;
-            document.getElementById('access-slot-password').value = auctionsData[currentAuctionKey].password || '';
+            document.getElementById('access-slot-name').value = currentLegaKey;
+            document.getElementById('access-slot-password').value = getLega().password || '';
             document.getElementById('access-modal').classList.remove('hidden');
             document.getElementById('access-modal').classList.add('flex');
         }
@@ -682,9 +826,9 @@
         }
         function saveSlotPassword() {
             const psw = document.getElementById('access-slot-password').value.trim();
-            auctionsData[currentAuctionKey].password = psw;
+            getLega().password = psw;
             saveState();
-            alert("🔑 Password impostata con successo per questo slot!");
+            alert("🔑 Password impostata con successo per questa lega!");
             closeAccessModal();
         }
 
@@ -715,7 +859,7 @@
             if (!trimmed) return;
             const oldName = customTiersConfig[idx].name;
             customTiersConfig[idx].name = trimmed;
-            
+
             for (let p in playerTiersMap) {
                 if (playerTiersMap[p] === oldName) {
                     playerTiersMap[p] = trimmed;
@@ -751,41 +895,58 @@
         function populateTierDropdowns() {
             const selectFilter = document.getElementById('fa-tier-filter');
             if (!selectFilter) return;
-            
+
             const currentVal = selectFilter.value;
             selectFilter.innerHTML = `<option value="ALL">Tutte le Fasce</option>` + customTiersConfig.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
             selectFilter.value = customTiersConfig.some(t => t.name === currentVal) || currentVal === 'ALL' ? currentVal : 'ALL';
         }
 
-        function switchAuctionSlot(slotKey) {
-            if (!auctionsData[slotKey]) return;
-            const psw = auctionsData[slotKey].password;
+        // --- Selettori Lega / Anno / Fase ---
+        function switchLega(legaKey) {
+            if (!leghe[legaKey]) return;
+            const psw = leghe[legaKey].password;
             if (psw) {
-                const entered = prompt(`Inserisci la password per accedere al tabellone "${slotKey}":`);
+                const entered = prompt(`Inserisci la password per accedere alla lega "${legaKey}":`);
                 if (entered !== psw) {
                     alert("Password errata!");
-                    renderAuctionSelector();
+                    renderLegaSelector();
                     return;
                 }
             }
-            currentAuctionKey = slotKey;
+            currentLegaKey = legaKey;
+            currentAnno = Object.keys(leghe[legaKey].anni)[0];
+            currentFase = 'settembre';
             saveState();
         }
 
-        function deleteCurrentSlot() {
-            const keys = Object.keys(auctionsData);
+        function switchAnno(annoKey) {
+            if (!getLega().anni[annoKey]) return;
+            currentAnno = annoKey;
+            currentFase = 'settembre';
+            saveState();
+        }
+
+        function switchFase(fase) {
+            currentFase = fase;
+            saveState();
+        }
+
+        function deleteCurrentLega() {
+            const keys = Object.keys(leghe);
             if (keys.length <= 1) {
-                alert("Non puoi eliminare l'unico slot disponibile!");
+                alert("Non puoi eliminare l'unica lega disponibile!");
                 return;
             }
-            if (confirm(`Sei sicuro di voler eliminare lo slot "${currentAuctionKey}"? Tutti i dati associati andranno persi.`)) {
-                delete auctionsData[currentAuctionKey];
-                currentAuctionKey = Object.keys(auctionsData)[0];
+            if (confirm(`Sei sicuro di voler eliminare la lega "${currentLegaKey}"? Tutti gli anni e i dati associati andranno persi per sempre.`)) {
+                delete leghe[currentLegaKey];
+                currentLegaKey = Object.keys(leghe)[0];
+                currentAnno = Object.keys(leghe[currentLegaKey].anni)[0];
+                currentFase = 'settembre';
                 saveState();
             }
         }
 
-        function openNewSlotModal() {
+        function openNewLegaModal() {
             document.getElementById('new-slot-name-input').value = '';
             document.getElementById('new-slot-psw-input').value = '';
             document.getElementById('new-slot-modal').classList.remove('hidden');
@@ -799,25 +960,158 @@
             const name = document.getElementById('new-slot-name-input').value.trim();
             const psw = document.getElementById('new-slot-psw-input').value.trim();
             if (!name) { alert("Inserisci un nome valido."); return; }
-            if (auctionsData[name]) { alert("Esiste già uno slot con questo nome."); return; }
+            if (leghe[name]) { alert("Esiste già una lega con questo nome."); return; }
 
-            auctionsData[name] = {
+            leghe[name] = {
                 password: psw,
                 config: {
                     initialBudget: 500,
                     managers: ['Giocatore 1', 'Giocatore 2', 'Giocatore 3', 'Giocatore 4', 'Giocatore 5', 'Giocatore 6', 'Giocatore 7', 'Giocatore 8'],
                     slots: { POR: 3, DIF: 8, CEN: 8, ATT: 6 }
                 },
-                purchases: []
+                anni: { "2026": nuovoAnnoVuoto() }
             };
-            currentAuctionKey = name;
+            currentLegaKey = name;
+            currentAnno = "2026";
+            currentFase = 'settembre';
             closeNewSlotModal();
             saveState();
         }
 
-        function renderAuctionSelector() {
-            const select = document.getElementById('auction-slot-select');
-            select.innerHTML = Object.keys(auctionsData).map(k => `<option value="${k}" ${k === currentAuctionKey ? 'selected' : ''}>${k} ${auctionsData[k].password ? '🔒' : ''}</option>`).join('');
+        function openNewAnnoModal() {
+            document.getElementById('new-anno-input').value = '';
+            document.getElementById('new-anno-modal').classList.remove('hidden');
+            document.getElementById('new-anno-modal').classList.add('flex');
+        }
+        function closeNewAnnoModal() {
+            document.getElementById('new-anno-modal').classList.add('hidden');
+            document.getElementById('new-anno-modal').classList.remove('flex');
+        }
+        function createNewAnno() {
+            const label = document.getElementById('new-anno-input').value.trim();
+            if (!label) { alert("Inserisci un'etichetta valida (es. 2027)."); return; }
+            if (getLega().anni[label]) { alert("Esiste già un anno con questa etichetta in questa lega."); return; }
+            getLega().anni[label] = nuovoAnnoVuoto();
+            currentAnno = label;
+            currentFase = 'settembre';
+            closeNewAnnoModal();
+            saveState();
+        }
+
+        function renderLegaSelector() {
+            const select = document.getElementById('lega-select');
+            select.innerHTML = Object.keys(leghe).map(k => `<option value="${k}" ${k === currentLegaKey ? 'selected' : ''}>${k} ${leghe[k].password ? '🔒' : ''}</option>`).join('');
+        }
+
+        function renderAnnoSelector() {
+            const select = document.getElementById('anno-select');
+            const anni = Object.keys(getLega().anni).sort();
+            select.innerHTML = anni.map(a => `<option value="${a}" ${a === currentAnno ? 'selected' : ''}>${a}</option>`).join('');
+        }
+
+        function renderFaseToggle() {
+            const btnSett = document.getElementById('fase-btn-settembre');
+            const btnRip = document.getElementById('fase-btn-riparazione');
+            btnSett.classList.toggle('active-settembre', currentFase === 'settembre');
+            btnRip.classList.toggle('active-riparazione', currentFase === 'riparazione');
+        }
+
+        function renderImportLockControls() {
+            const fase = getFaseObj();
+            const importLabel = document.getElementById('import-excel-label');
+            const lockedBadge = document.getElementById('listone-locked-badge');
+            const lockBtn = document.getElementById('lock-listone-btn');
+
+            if (fase.listoneLocked) {
+                importLabel.classList.add('hidden');
+                lockedBadge.classList.remove('hidden');
+                lockedBadge.classList.add('flex');
+                lockBtn.classList.add('hidden');
+            } else {
+                importLabel.classList.remove('hidden');
+                lockedBadge.classList.add('hidden');
+                lockedBadge.classList.remove('flex');
+                if (fase.listone && fase.listone.length > 0) {
+                    lockBtn.classList.remove('hidden');
+                    lockBtn.classList.add('flex');
+                } else {
+                    lockBtn.classList.add('hidden');
+                }
+            }
+        }
+
+        function lockCurrentListone() {
+            const fase = getFaseObj();
+            if (!fase.listone || fase.listone.length === 0) { alert("Importa prima un listone per questa fase."); return; }
+            const faseLabel = currentFase === 'settembre' ? 'Settembre' : 'Riparazione';
+            if (!confirm(`Vuoi bloccare per sempre il listone dell'Asta di ${faseLabel} ${currentAnno}?\n\nDa questo momento non potrai più sovrascriverlo importando un nuovo file, a meno di sbloccarlo esplicitamente in seguito.`)) return;
+            fase.listoneLocked = true;
+            saveState();
+        }
+
+        function unlockCurrentListone() {
+            const typed = prompt("Per sbloccare il listone scrivi SBLOCCA (tutto maiuscolo). Attenzione: potresti sovrascrivere l'archivio storico di questa fase importando un nuovo file.");
+            if (typed === null) return;
+            if (typed !== 'SBLOCCA') { alert('Testo non corretto, sblocco annullato.'); return; }
+            getFaseObj().listoneLocked = false;
+            saveState();
+        }
+
+        function renderDelistedPanel() {
+            const panel = document.getElementById('delisted-panel');
+            const list = document.getElementById('delisted-list');
+            const delisted = getDelistedPurchasedPlayers();
+
+            if (currentFase !== 'riparazione' || delisted.length === 0) {
+                panel.classList.add('hidden');
+                return;
+            }
+            panel.classList.remove('hidden');
+            list.innerHTML = delisted.map(p => `
+                <div class="bg-slate-900/60 border border-red-500/30 rounded-xl p-2.5 flex items-center justify-between gap-2 text-xs">
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-1.5">
+                            <span class="role-${p.role.toLowerCase()} px-1.5 py-0.2 rounded font-bold text-[9px]">${p.role}</span>
+                            <span class="font-bold text-white truncate">${p.player}</span>
+                        </div>
+                        <div class="text-[10px] text-slate-400">di <strong class="text-indigo-300">${p.owner}</strong> — pagato ${p.price}€</div>
+                    </div>
+                    <button onclick="releasePlayer(${p.id})" class="bg-red-600 hover:bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-lg whitespace-nowrap">Svincola (100%)</button>
+                </div>
+            `).join('');
+        }
+
+        // Svincola un giocatore acquistato a Settembre durante l'Asta di Riparazione.
+        // Rimborso automatico: 100% se il giocatore non è più nel listone di Riparazione, altrimenti 50% arrotondato per eccesso.
+        function releasePlayer(purchaseId) {
+            if (currentFase !== 'riparazione') return;
+            const sett = getFaseObj('settembre');
+            const rip = getFaseObj('riparazione');
+            const purchase = sett.purchases.find(p => p.id === purchaseId);
+            if (!purchase) return;
+            if (getReleasedSettembreIds().has(purchaseId)) { alert('Questo giocatore è già stato svincolato.'); return; }
+
+            const ripNames = new Set((rip.listone || []).map(p => p.name.toLowerCase()));
+            const stillListed = ripNames.has(purchase.player.toLowerCase());
+            const refund = stillListed ? Math.ceil(purchase.price / 2) : purchase.price;
+            const label = stillListed ? '50% (è ancora nel listone: torna disponibile per tutti)' : '100% (non è più presente nel listone di gennaio)';
+
+            if (!confirm(`Svincolare ${purchase.player} da ${purchase.owner}?\n\nRimborso: ${refund}€ — ${label}`)) return;
+
+            rip.releases = rip.releases || [];
+            rip.releases.push({
+                id: 'r_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+                purchaseId: purchase.id,
+                player: purchase.player,
+                role: purchase.role,
+                club: purchase.club,
+                owner: purchase.owner,
+                originalPrice: purchase.price,
+                refund,
+                mode: stillListed ? 'half' : 'full',
+                ts: Date.now()
+            });
+            saveState();
         }
 
         function switchTab(tab) {
@@ -839,17 +1133,24 @@
         function importListoneFile(event) {
             const file = event.target.files[0];
             if (!file) return;
+
+            if (getFaseObj().listoneLocked) {
+                alert("Il listone di questa fase è bloccato: sbloccalo esplicitamente (bottone 🔒 in alto) prima di importarne uno nuovo.");
+                event.target.value = '';
+                return;
+            }
+
             const reader = new FileReader();
             reader.onload = function(e) {
                 try {
                     const data = new Uint8Array(e.target.result);
                     const workbook = XLSX.read(data, { type: 'array' });
-                    
+
                     const firstSheetName = workbook.SheetNames[0];
                     const worksheet = workbook.Sheets[firstSheetName];
-                    
+
                     const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
-                    
+
                     let headerIndex = -1;
                     let colMap = {};
 
@@ -904,11 +1205,11 @@
 
                             if (name && ['POR', 'DIF', 'CEN', 'ATT'].includes(role)) {
                                 if (!newListone.some(p => p.name.toLowerCase() === name.toLowerCase())) {
-                                    newListone.push({ 
-                                        name, 
-                                        role, 
-                                        club: club || 'Serie A', 
-                                        fvm: (!isNaN(fvmVal) && fvmVal > 0) ? fvmVal : 1 
+                                    newListone.push({
+                                        name,
+                                        role,
+                                        club: club || 'Serie A',
+                                        fvm: (!isNaN(fvmVal) && fvmVal > 0) ? fvmVal : 1
                                     });
                                 }
                             }
@@ -943,16 +1244,16 @@
                     }
 
                     if (newListone.length > 0) {
-                        listone = newListone;
+                        getFaseObj().listone = newListone;
                         populateClubFilter();
                         saveState();
-                        alert(`✅ Caricati ${listone.length} giocatori correttamente!`);
+                        alert(`✅ Caricati ${newListone.length} giocatori correttamente nel listone di ${currentFase === 'settembre' ? 'Settembre' : 'Riparazione'}!`);
                     } else {
                         alert("❌ Impossibile estrarre i giocatori.");
                     }
-                } catch(err) { 
+                } catch(err) {
                     console.error(err);
-                    alert("❌ Errore nella lettura del file Excel."); 
+                    alert("❌ Errore nella lettura del file Excel.");
                 }
             };
             reader.readAsArrayBuffer(file);
@@ -961,23 +1262,23 @@
         function populateClubFilter() {
             const select = document.getElementById('fa-club-filter');
             if (!select) return;
-            const clubs = [...new Set(listone.map(p => p.club))].sort();
+            const clubs = [...new Set(getListone().map(p => p.club))].sort();
             select.innerHTML = `<option value="ALL">Tutte le Squadre</option>` + clubs.map(c => `<option value="${c}">${c}</option>`).join('');
         }
 
         function handleSearch(val) {
             const box = document.getElementById('suggestions-box');
-            if (!val || val.trim().length === 0) { 
-                box.classList.add('hidden'); 
-                return; 
+            if (!val || val.trim().length === 0) {
+                box.classList.add('hidden');
+                return;
             }
-            
+
             const query = val.toLowerCase().trim();
-            const matches = listone.filter(p => p.name.toLowerCase().includes(query)).slice(0, 8);
+            const matches = getListone().filter(p => p.name.toLowerCase().includes(query)).slice(0, 8);
             if (matches.length === 0) { box.classList.add('hidden'); return; }
 
             box.innerHTML = matches.map(p => `
-                <div onclick="selectPlayer('${p.name.replace(/'/g, "\\'")}', '${p.role}', '${p.club}')" 
+                <div onclick="selectPlayer('${p.name.replace(/'/g, "\\'")}', '${p.role}', '${p.club}')"
                      class="p-2 hover:bg-indigo-600/30 cursor-pointer flex justify-between items-center text-xs transition">
                     <span class="font-bold text-white">${p.name} <span class="text-slate-400 font-normal">(${p.club})</span></span>
                     <span class="role-${p.role.toLowerCase()} px-2 py-0.5 rounded font-bold text-[10px]">${p.role}</span>
@@ -991,10 +1292,10 @@
             document.getElementById('input-role').value = role;
             document.getElementById('input-club').value = club;
             document.getElementById('suggestions-box').classList.add('hidden');
-            
+
             const stepsContainer = document.getElementById('auction-steps-container');
             stepsContainer.classList.remove('opacity-40', 'pointer-events-none');
-            
+
             document.getElementById('input-owner').removeAttribute('disabled');
             document.getElementById('input-price').removeAttribute('disabled');
             const submitBtn = document.getElementById('submit-btn');
@@ -1008,10 +1309,9 @@
         }
 
         function randomCallPlayer() {
-            const currentPurchases = auctionsData[currentAuctionKey].purchases;
-            const purchasedNames = new Set(currentPurchases.map(p => p.player.toLowerCase()));
-            const available = listone.filter(p => !purchasedNames.has(p.name.toLowerCase()));
-            
+            const purchasedNames = new Set(getEffectivePurchases().map(p => p.player.toLowerCase()));
+            const available = getListone().filter(p => !purchasedNames.has(p.name.toLowerCase()));
+
             if (available.length === 0) {
                 alert("Non ci sono più giocatori liberi!");
                 return;
@@ -1029,12 +1329,12 @@
             const price = parseInt(document.getElementById('input-price').value);
             if (!player || !price) return;
 
-            auctionsData[currentAuctionKey].purchases.unshift({ id: Date.now(), player, role, club, owner, price });
-            
+            getFaseObj().purchases.unshift({ id: Date.now(), player, role, club, owner, price, phase: currentFase });
+
             document.getElementById('input-player').value = '';
             document.getElementById('input-club').value = '';
             document.getElementById('input-price').value = '1';
-            
+
             document.getElementById('auction-steps-container').classList.add('opacity-40', 'pointer-events-none');
             document.getElementById('input-owner').setAttribute('disabled', 'true');
             document.getElementById('input-price').setAttribute('disabled', 'true');
@@ -1049,40 +1349,89 @@
         }
 
         function deletePurchase(id) {
-            let purchases = auctionsData[currentAuctionKey].purchases;
-            auctionsData[currentAuctionKey].purchases = purchases.filter(p => p.id !== id);
+            // Elimina solo un acquisto "nativo" della fase corrente (non tocca l'archivio di Settembre durante la Riparazione:
+            // per quello si usa releasePlayer, che tiene traccia dello svincolo invece di cancellare la storia).
+            const fase = getFaseObj();
+            fase.purchases = fase.purchases.filter(p => p.id !== id);
             saveState();
         }
 
         function renderLiveHistory() {
-            const purchases = auctionsData[currentAuctionKey].purchases;
             const container = document.getElementById('live-history-container');
             const badge = document.getElementById('history-count-badge');
-            
-            badge.innerText = purchases.length;
+            const scopeLabel = document.getElementById('history-scope-label');
 
-            if (purchases.length === 0) {
-                container.innerHTML = `<p class="text-[11px] text-slate-500 italic text-center py-6">Nessun acquisto registrato.</p>`;
+            if (currentFase === 'settembre') {
+                scopeLabel.innerText = 'Acquisti';
+                const purchases = getFaseObj().purchases;
+                badge.innerText = purchases.length;
+                if (purchases.length === 0) {
+                    container.innerHTML = `<p class="text-[11px] text-slate-500 italic text-center py-6">Nessun acquisto registrato.</p>`;
+                    return;
+                }
+                container.innerHTML = purchases.map(p => `
+                    <div class="bg-slate-800/80 border border-slate-700/60 p-2 rounded-xl flex items-center justify-between text-xs gap-2">
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-1.5">
+                                <span class="role-${p.role.toLowerCase()} px-1.5 py-0.2 rounded font-bold text-[9px]">${p.role}</span>
+                                <span class="font-bold text-white truncate text-[11px]" title="${p.player}">${p.player}</span>
+                            </div>
+                            <div class="text-[10px] text-slate-400 truncate mt-0.5">
+                                a <strong class="text-indigo-300">${p.owner}</strong>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-1.5 flex-shrink-0">
+                            <span class="font-mono font-bold text-emerald-400 text-xs">${p.price}€</span>
+                            <button onclick="deletePurchase(${p.id})" class="text-slate-500 hover:text-red-400 font-bold px-1 text-xs" title="Elimina">×</button>
+                        </div>
+                    </div>
+                `).join('');
                 return;
             }
 
-            container.innerHTML = purchases.map(p => `
-                <div class="bg-slate-800/80 border border-slate-700/60 p-2 rounded-xl flex items-center justify-between text-xs gap-2">
-                    <div class="min-w-0 flex-1">
-                        <div class="flex items-center gap-1.5">
-                            <span class="role-${p.role.toLowerCase()} px-1.5 py-0.2 rounded font-bold text-[9px]">${p.role}</span>
-                            <span class="font-bold text-white truncate text-[11px]" title="${p.player}">${p.player}</span>
+            // Fase Riparazione: mostra un feed unico di nuovi acquisti + svincoli, i più recenti in cima
+            scopeLabel.innerText = 'Movimenti';
+            const rip = getFaseObj('riparazione');
+            const events = [
+                ...rip.purchases.map(p => ({ type: 'buy', ts: p.id, ...p })),
+                ...(rip.releases || []).map(r => ({ type: 'release', ts: r.ts || 0, ...r }))
+            ].sort((a, b) => b.ts - a.ts);
+
+            badge.innerText = events.length;
+            if (events.length === 0) {
+                container.innerHTML = `<p class="text-[11px] text-slate-500 italic text-center py-6">Nessun movimento in questa Riparazione.</p>`;
+                return;
+            }
+
+            container.innerHTML = events.map(ev => {
+                if (ev.type === 'buy') {
+                    return `
+                    <div class="bg-slate-800/80 border border-emerald-700/40 p-2 rounded-xl flex items-center justify-between text-xs gap-2">
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-1.5">
+                                <span class="role-${ev.role.toLowerCase()} px-1.5 py-0.2 rounded font-bold text-[9px]">${ev.role}</span>
+                                <span class="font-bold text-white truncate text-[11px]">🛒 ${ev.player}</span>
+                            </div>
+                            <div class="text-[10px] text-slate-400 truncate mt-0.5">a <strong class="text-indigo-300">${ev.owner}</strong></div>
                         </div>
-                        <div class="text-[10px] text-slate-400 truncate mt-0.5">
-                            a <strong class="text-indigo-300">${p.owner}</strong>
+                        <div class="flex items-center gap-1.5 flex-shrink-0">
+                            <span class="font-mono font-bold text-emerald-400 text-xs">${ev.price}€</span>
+                            <button onclick="deletePurchase(${ev.id})" class="text-slate-500 hover:text-red-400 font-bold px-1 text-xs" title="Elimina">×</button>
                         </div>
-                    </div>
-                    <div class="flex items-center gap-1.5 flex-shrink-0">
-                        <span class="font-mono font-bold text-emerald-400 text-xs">${p.price}€</span>
-                        <button onclick="deletePurchase(${p.id})" class="text-slate-500 hover:text-red-400 font-bold px-1 text-xs" title="Elimina">×</button>
-                    </div>
-                </div>
-            `).join('');
+                    </div>`;
+                }
+                return `
+                    <div class="bg-slate-800/80 border border-red-700/40 p-2 rounded-xl flex items-center justify-between text-xs gap-2">
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-1.5">
+                                <span class="role-${ev.role.toLowerCase()} px-1.5 py-0.2 rounded font-bold text-[9px]">${ev.role}</span>
+                                <span class="font-bold text-white truncate text-[11px]">✂️ ${ev.player}</span>
+                            </div>
+                            <div class="text-[10px] text-slate-400 truncate mt-0.5">da <strong class="text-indigo-300">${ev.owner}</strong> (${ev.mode === 'full' ? '100%' : '50%'})</div>
+                        </div>
+                        <span class="font-mono font-bold text-amber-400 text-xs">+${ev.refund}€</span>
+                    </div>`;
+            }).join('');
         }
 
         function renderFreeAgents() {
@@ -1092,12 +1441,11 @@
             const roleFilter = document.getElementById('fa-role-filter').value;
             const tierFilter = document.getElementById('fa-tier-filter').value;
             const clubFilter = document.getElementById('fa-club-filter').value;
-            
-            const currentPurchases = auctionsData[currentAuctionKey].purchases;
-            const purchasedNames = new Set(currentPurchases.map(p => p.player.toLowerCase()));
 
-            let available = listone.filter(p => !purchasedNames.has(p.name.toLowerCase()));
-            
+            const purchasedNames = new Set(getEffectivePurchases().map(p => p.player.toLowerCase()));
+
+            let available = getListone().filter(p => !purchasedNames.has(p.name.toLowerCase()));
+
             let tierCounts = {};
             customTiersConfig.forEach(t => tierCounts[t.name] = 0);
             tierCounts["Senza Fascia"] = 0;
@@ -1113,7 +1461,7 @@
 
             const tierBar = document.getElementById('tiers-counter-bar');
             let tierBarHtml = `<div class="text-indigo-300 font-bold col-span-2 sm:col-span-full pb-1 border-b border-slate-800 flex justify-between items-center"><span>📊 Svincolati per Fascia (Disponibili):</span> <button onclick="openTiersManagerModal()" class="text-[10px] text-indigo-400 hover:underline">Configura Fasce</button></div>`;
-            
+
             customTiersConfig.forEach(t => {
                 tierBarHtml += `<div class="bg-slate-900 px-2 py-1 rounded-lg border border-slate-800 flex justify-between items-center"><span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full inline-block" style="background:${t.color}"></span>${t.name}:</span><strong class="text-white font-mono">${tierCounts[t.name]}</strong></div>`;
             });
@@ -1194,11 +1542,11 @@
                         </td>
                         <td class="px-3.5 py-2 text-right font-mono text-indigo-300 font-bold">${p.fvm || '-'}</td>
                         <td class="px-3.5 py-2 text-right">
-                            <input type="number" min="0" value="${customVal}" onchange="updateCustomValue('${p.name.replace(/'/g, "\\'")}', this.value)" placeholder="-" 
+                            <input type="number" min="0" value="${customVal}" onchange="updateCustomValue('${p.name.replace(/'/g, "\\'")}', this.value)" placeholder="-"
                                 class="w-16 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-right text-emerald-400 font-mono font-bold text-xs focus:outline-none focus:border-indigo-500">
                         </td>
                         <td class="px-3.5 py-2">
-                            <input type="text" value="${playerNote}" onchange="updatePlayerNote('${p.name.replace(/'/g, "\\'")}', this.value)" placeholder="Note..." 
+                            <input type="text" value="${playerNote}" onchange="updatePlayerNote('${p.name.replace(/'/g, "\\'")}', this.value)" placeholder="Note..."
                                 class="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-indigo-500">
                         </td>
                         <td class="px-3.5 py-2 text-center whitespace-nowrap">${starsHtml}</td>
@@ -1209,7 +1557,7 @@
 
         function renderGkGrid() {
             const table = document.getElementById('gk-matrix-table');
-            
+
             let minVal = 999;
             gkMatrixData.forEach((row, i) => {
                 row.forEach((val, j) => {
@@ -1265,15 +1613,32 @@
         }
 
         function getTeamStats(manager) {
-            const config = auctionsData[currentAuctionKey].config;
-            const purchases = auctionsData[currentAuctionKey].purchases;
-            const teamP = purchases.filter(p => p.owner === manager);
-            const spent = teamP.reduce((acc, p) => acc + p.price, 0);
+            const config = getConfig();
+            const sett = getFaseObj('settembre');
+            const releasedIds = currentFase === 'riparazione' ? getReleasedSettembreIds() : new Set();
+
+            const allSettembrePurchases = sett.purchases.filter(p => p.owner === manager);
+            const activeSettembrePurchases = allSettembrePurchases.filter(p => !releasedIds.has(p.id));
+            let riparazionePurchases = [];
+            let refunds = 0;
+            if (currentFase === 'riparazione') {
+                const rip = getFaseObj('riparazione');
+                riparazionePurchases = rip.purchases.filter(p => p.owner === manager);
+                refunds = (rip.releases || []).filter(r => r.owner === manager).reduce((acc, r) => acc + r.refund, 0);
+            }
+
+            // Il roster "attivo" (per slot/ruoli in rosa) esclude i giocatori svincolati, ma il bilancio crediti
+            // deve considerare TUTTI gli acquisti di Settembre fatti (anche quelli poi svincolati) meno i rimborsi:
+            // così uno svincolo al 50% resta comunque un costo netto, e uno svincolo al 100% torna a saldo zero
+            // (senza questa distinzione, escludere il giocatore E sottrarre il rimborso lo conterebbe due volte).
+            const teamP = [...activeSettembrePurchases, ...riparazionePurchases];
+            const grossSpent = allSettembrePurchases.reduce((acc, p) => acc + p.price, 0) + riparazionePurchases.reduce((acc, p) => acc + p.price, 0);
+            const spent = grossSpent - refunds;
             const remaining = config.initialBudget - spent;
-            
+
             const totalSlots = (config.slots.POR || 0) + (config.slots.DIF || 0) + (config.slots.CEN || 0) + (config.slots.ATT || 0);
             const remainingSlots = Math.max(0, totalSlots - teamP.length);
-            
+
             const maxBid = Math.max(0, remaining - (remainingSlots > 0 ? remainingSlots - 1 : 0));
 
             const rolesCount = { POR: 0, DIF: 0, CEN: 0, ATT: 0 };
@@ -1283,11 +1648,11 @@
         }
 
         function renderTeamsOverview() {
-            const config = auctionsData[currentAuctionKey].config;
+            const config = getConfig();
             const container = document.getElementById('teams-overview-grid');
             const rankingContainer = document.getElementById('ranking-list-container');
             const simPrice = parseInt(document.getElementById('sim-bid-price').value) || 0;
-            
+
             let maxRemainingBudget = -1;
             const statsMap = {};
             config.managers.forEach(m => {
@@ -1321,7 +1686,7 @@
                 const stats = statsMap[m];
                 const isRichest = stats.remaining === maxRemainingBudget;
                 const cardHighlightClass = isRichest ? 'richest-team-card' : 'border-slate-700/60';
-                
+
                 let canAfford = stats.remaining >= simPrice && (stats.remaining - simPrice) >= (stats.remainingSlots > 1 ? stats.remainingSlots - 1 : 0);
                 const badgeClass = canAfford ? 'bg-emerald-950/80 text-emerald-300 border-emerald-600/40' : 'bg-red-950/80 text-red-300 border-red-600/40';
                 const badgeText = canAfford ? '✅ Ok' : '❌ No';
@@ -1357,10 +1722,11 @@
         }
 
         function renderFantalabStyleTables(containerId) {
-            const config = auctionsData[currentAuctionKey].config;
-            const purchases = auctionsData[currentAuctionKey].purchases;
+            const config = getConfig();
             const container = document.getElementById(containerId);
             if (!container) return;
+
+            const releasedIds = currentFase === 'riparazione' ? getReleasedSettembreIds() : new Set();
 
             ['POR', 'DIF', 'CEN', 'ATT'].forEach(r => {
                 const btn = document.getElementById('btn-toggle-' + r);
@@ -1387,7 +1753,10 @@
             const initialBudget = config.initialBudget || 1;
 
             config.managers.forEach(m => {
-                const teamPurchases = purchases.filter(p => p.owner === m);
+                const sett = getFaseObj('settembre');
+                const settembrePurchases = sett.purchases.filter(p => p.owner === m && !releasedIds.has(p.id));
+                const riparazionePurchases = currentFase === 'riparazione' ? getFaseObj('riparazione').purchases.filter(p => p.owner === m) : [];
+                const teamPurchases = [...settembrePurchases, ...riparazionePurchases];
                 const totalCount = teamPurchases.length;
                 const maxSlots = (config.slots.POR || 0) + (config.slots.DIF || 0) + (config.slots.CEN || 0) + (config.slots.ATT || 0);
 
@@ -1420,6 +1789,7 @@
                             <div class="flex justify-center items-center gap-1 text-[9px] text-slate-400 mt-0.5">
                                 <span>Slot completati:</span>
                                 <span class="font-mono text-indigo-300 font-bold">${mData.totalCount}/${mData.maxSlots}</span>
+                                <span class="text-emerald-400 font-mono font-bold">(${Math.max(0, mData.maxSlots - mData.totalCount)} liberi)</span>
                             </div>
                         </div>
 
@@ -1444,12 +1814,17 @@
                         for (let i = 0; i < maxSlotsRole; i++) {
                             const player = rData.purchases[i];
                             if (player) {
+                                const isFromSettembre = player.phase === 'settembre' || (!player.phase && currentFase === 'settembre');
+                                const canSvincola = currentFase === 'riparazione' && isFromSettembre;
+                                const actionBtn = canSvincola
+                                    ? `<button onclick="releasePlayer(${player.id})" class="text-amber-400 hover:text-amber-300 font-bold text-[9px]" title="Svincola">✂️</button>`
+                                    : `<button onclick="deletePurchase(${player.id})" class="text-slate-500 hover:text-red-400 font-bold text-[9px]" title="Elimina">×</button>`;
                                 html += `
                                     <div class="fl-player-card px-2 py-0.5 rounded-xl flex justify-between items-center text-[10px] shadow-sm">
                                         <span class="font-bold text-slate-200 truncate flex-1 text-left" title="${player.player}">${player.player}</span>
                                         <div class="flex items-center gap-1 pl-1 flex-shrink-0">
                                             <span class="font-mono font-bold text-emerald-400">${player.price}€</span>
-                                            <button onclick="deletePurchase(${player.id})" class="text-slate-500 hover:text-red-400 font-bold text-[9px]" title="Elimina">×</button>
+                                            ${actionBtn}
                                         </div>
                                     </div>
                                 `;
@@ -1486,10 +1861,10 @@
         }
 
         function renderStats() {
-            const config = auctionsData[currentAuctionKey].config;
-            const purchases = auctionsData[currentAuctionKey].purchases;
+            const config = getConfig();
+            const purchases = getEffectivePurchases();
             const roles = ['POR', 'DIF', 'CEN', 'ATT'];
-            
+
             document.getElementById('top-paid-roles').innerHTML = roles.map(r => {
                 const top = purchases.filter(p => p.role === r).sort((a,b) => b.price - a.price)[0];
                 return `
@@ -1513,8 +1888,8 @@
         }
 
         function openConfigModal() {
-            const config = auctionsData[currentAuctionKey].config;
-            document.getElementById('modal-slot-name').innerText = currentAuctionKey;
+            const config = getConfig();
+            document.getElementById('modal-slot-name').innerText = currentLegaKey;
             document.getElementById('cfg-budget').value = config.initialBudget;
             document.getElementById('cfg-managers').value = config.managers.join(', ');
             document.getElementById('cfg-slot-por').value = config.slots.POR;
@@ -1529,9 +1904,10 @@
             document.getElementById('config-modal').classList.remove('flex');
         }
         function saveConfig() {
-            auctionsData[currentAuctionKey].config.initialBudget = parseInt(document.getElementById('cfg-budget').value) / 1 || 500;
-            auctionsData[currentAuctionKey].config.managers = document.getElementById('cfg-managers').value.split(',').map(m => m.trim()).filter(Boolean);
-            auctionsData[currentAuctionKey].config.slots = {
+            const config = getConfig();
+            config.initialBudget = parseInt(document.getElementById('cfg-budget').value) / 1 || 500;
+            config.managers = document.getElementById('cfg-managers').value.split(',').map(m => m.trim()).filter(Boolean);
+            config.slots = {
                 POR: parseInt(document.getElementById('cfg-slot-por').value) || 3,
                 DIF: parseInt(document.getElementById('cfg-slot-dif').value) || 8,
                 CEN: parseInt(document.getElementById('cfg-slot-cen').value) || 8,
@@ -1542,17 +1918,38 @@
         }
 
         function exportToCSV() {
-            const config = auctionsData[currentAuctionKey].config;
+            const config = getConfig();
             let content = config.managers.map(m => `"${m}", ""`).join(',') + "\n";
             const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
-            link.download = `FantAsta_${currentAuctionKey.replace(/\s+/g, '_')}_Rose.csv`;
+            link.download = `FantAsta_${currentLegaKey.replace(/\s+/g, '_')}_${currentAnno}_${currentFase}_Rose.csv`;
+            link.click();
+        }
+
+        // Export generico (Ruolo, Nome, Squadra, Fantasquadra, Prezzo) pensato per essere adattato
+        // all'importazione rose di piattaforme come Leghe Fantacalcio. Il formato esatto richiesto da
+        // ogni piattaforma non è documentato pubblicamente: verifica le prime righe prima di caricarlo.
+        function exportForLegheFantacalcio() {
+            const purchases = getEffectivePurchases();
+            if (purchases.length === 0) { alert("Nessun acquisto da esportare in questa fase."); return; }
+            let content = "Ruolo,Nome,Squadra,Fantasquadra,Prezzo\n";
+            purchases.forEach(p => {
+                content += `${p.role},"${p.player}","${p.club}","${p.owner}",${p.price}\n`;
+            });
+            const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `FantAsta_${currentLegaKey.replace(/\s+/g, '_')}_${currentAnno}_${currentFase}_per-LegheFC.csv`;
             link.click();
         }
 
         function renderAll() {
-            renderAuctionSelector();
+            renderLegaSelector();
+            renderAnnoSelector();
+            renderFaseToggle();
+            renderImportLockControls();
+            renderDelistedPanel();
             populateClubFilter();
             populateTierDropdowns();
             renderOwnerSelect();
@@ -1570,7 +1967,7 @@
         }
 
         function renderOwnerSelect() {
-            const config = auctionsData[currentAuctionKey].config;
+            const config = getConfig();
             document.getElementById('input-owner').innerHTML = config.managers.map(m => `<option value="${m}">${m}</option>`).join('');
         }
 
