@@ -55,7 +55,7 @@
     <div id="sync-status-banner" class="hidden fixed top-2 left-1/2 -translate-x-1/2 z-[9999] max-w-lg w-[92%] text-xs font-semibold px-4 py-2.5 rounded-xl shadow-2xl border text-center"></div>
 
     <!-- Header Principale & Navbar Orizzontale Fissa -->
-    <header class="bg-[#0f172a] border-b border-slate-800 z-40 shadow-xl flex-shrink-0 fixed top-0 left-0 right-0">
+    <header id="site-header" class="bg-[#0f172a] border-b border-slate-800 z-40 shadow-xl flex-shrink-0 fixed top-0 left-0 right-0">
         <div class="w-full px-4 sm:px-6">
             <div class="flex flex-col lg:flex-row items-center justify-between py-2 gap-2">
                 
@@ -121,7 +121,7 @@
     </header>
 
     <!-- Area Principale a Schermo Intero -->
-    <main class="w-full px-4 sm:px-6 py-3 flex-1 overflow-y-auto space-y-4 mt-[68px]">
+    <main id="main-content" class="w-full px-4 sm:px-6 py-3 flex-1 overflow-y-auto space-y-4" style="margin-top: var(--header-h, 68px);">
 
         <!-- TAB 1: ASTA LIVE & CREDITI -->
         <div id="view-auction" class="space-y-4 pb-4">
@@ -226,7 +226,7 @@
                 <div class="h-scroll-hint items-center gap-1.5 text-[10px] text-slate-500 mb-1">
                     <i>👉</i> Scorri lateralmente per vedere tutti i partecipanti
                 </div>
-                <div id="teams-overview-grid" class="flex flex-row gap-2 w-full pb-2 overflow-x-auto"></div>
+                <div id="teams-overview-grid" class="flex flex-row gap-2 w-full pt-4 pb-2 overflow-x-auto overflow-y-visible"></div>
             </div>
 
             <!-- Tabellone Rose e Reparti -->
@@ -1574,9 +1574,23 @@
             document.getElementById('input-owner').innerHTML = config.managers.map(m => `<option value="${m}">${m}</option>`).join('');
         }
 
+        // Misura l'altezza reale dell'header (che su mobile va su più righe) e sposta di conseguenza
+        // il contenuto sotto, così l'header fisso non copre mai nulla, a qualunque larghezza schermo.
+        function syncHeaderHeight() {
+            const header = document.getElementById('site-header');
+            if (!header) return;
+            document.documentElement.style.setProperty('--header-h', header.offsetHeight + 'px');
+        }
+
         // Avvio all'apertura della pagina caricando i dati da Supabase
-        window.onload = () => { 
-            loadDataFromSupabase(); 
+        window.onload = () => {
+            loadDataFromSupabase();
+            syncHeaderHeight();
+            window.addEventListener('resize', syncHeaderHeight);
+            window.addEventListener('orientationchange', () => setTimeout(syncHeaderHeight, 150));
+            if (window.ResizeObserver) {
+                new ResizeObserver(syncHeaderHeight).observe(document.getElementById('site-header'));
+            }
         };
     </script>
 </body>
