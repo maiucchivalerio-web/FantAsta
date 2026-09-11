@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FantAsta - Gestore Multi-Asta Pro</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔨</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <!-- Includi la libreria di Supabase -->
@@ -66,10 +67,8 @@
 
                 <div class="flex items-center justify-between w-full lg:w-auto gap-4 flex-wrap">
                     <div class="flex items-center space-x-3">
-                        <div class="bg-gradient-to-tr from-amber-500 via-yellow-500 to-amber-600 p-2 rounded-xl text-white shadow-xl flex items-center justify-center ring-2 ring-amber-400/30">
-                            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M8 21h8m-4-9v9m-8-9a8 8 0 1116 0M6 5h12a2 2 0 012 2v2a6 6 0 01-12 0V7a2 2 0 012-2z"></path>
-                            </svg>
+                        <div class="bg-gradient-to-tr from-amber-500 via-yellow-500 to-amber-600 p-2 rounded-xl text-white shadow-xl flex items-center justify-center ring-2 ring-amber-400/30 w-8 h-8">
+                            <span class="text-base leading-none" style="transform: rotate(-15deg); display:inline-block;">🔨</span>
                         </div>
                         <div>
                             <div class="flex items-center gap-2">
@@ -1268,13 +1267,32 @@
 
         function handleSearch(val) {
             const box = document.getElementById('suggestions-box');
+
+            // Ogni volta che si digita una NUOVA ricerca, i campi Ruolo/Squadra/Prezzo/Manager
+            // tornano bloccati e "vuoti" finché non si clicca di nuovo un suggerimento.
+            // Senza questo reset, i campi potevano restare visibili con i dati del giocatore
+            // selezionato in precedenza (es. Ruolo e Squadra sbagliati) mentre si cercava un altro nome.
+            document.getElementById('input-role').value = 'POR';
+            document.getElementById('input-club').value = '';
+            document.getElementById('auction-steps-container').classList.add('opacity-40', 'pointer-events-none');
+            document.getElementById('input-owner').setAttribute('disabled', 'true');
+            document.getElementById('input-price').setAttribute('disabled', 'true');
+            const submitBtn = document.getElementById('submit-btn');
+            submitBtn.setAttribute('disabled', 'true');
+            submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            document.getElementById('step-indicator').innerText = "Passo 1: Cerca giocatore";
+            document.getElementById('step-indicator').className = "text-[10px] bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 px-2 py-0.5 rounded-full font-normal";
+
             if (!val || val.trim().length === 0) {
                 box.classList.add('hidden');
                 return;
             }
 
             const query = val.toLowerCase().trim();
-            const matches = getListone().filter(p => p.name.toLowerCase().includes(query)).slice(0, 8);
+            const purchasedNames = new Set(getEffectivePurchases().map(p => p.player.toLowerCase()));
+            const matches = getListone()
+                .filter(p => p.name.toLowerCase().includes(query) && !purchasedNames.has(p.name.toLowerCase()))
+                .slice(0, 8);
             if (matches.length === 0) { box.classList.add('hidden'); return; }
 
             box.innerHTML = matches.map(p => `
