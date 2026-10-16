@@ -1,6 +1,6 @@
-name: Prova API-Football
+name: Prova Highlightly
 
-# Avvio solo manuale: verifica cosa include il piano per la Serie A (circa 6 richieste)
+# Avvio solo manuale: verifica cosa include il piano gratuito per la Serie A (poche richieste)
 on:
   workflow_dispatch:
     inputs:
@@ -21,6 +21,6 @@ jobs:
           python-version: "3.12"
       - name: Prova accesso Serie A
         env:
-          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          HIGHLIGHTLY_KEY: ${{ secrets.HIGHLIGHTLY_KEY }}
           SEASON: ${{ github.event.inputs.season }}
-        run: python scripts/probe_api_football.py
+        run: python scripts/probe_highlightly.py
