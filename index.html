@@ -2083,10 +2083,14 @@
             });
             // Prossima partita (probabile formazione) per ogni club
             const nextMatch = {};
-            (_bsdData.predicted || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date))).forEach(m => {
+            // Prima le probabili formazioni delle prossime partite (in ordine di data), poi l'ultima giocata come riserva
+            const preds = (_bsdData.predicted || []).slice().sort((a, b) =>
+                ((a.kind === 'last') - (b.kind === 'last')) || (a.kind === 'last' ? String(b.date).localeCompare(String(a.date)) : String(a.date).localeCompare(String(b.date))));
+            preds.forEach(m => {
                 [['home', 'away'], ['away', 'home']].forEach(([side, other]) => {
                     const club = realClubName(m[side]);
-                    if (!nextMatch[club]) nextMatch[club] = { m, side, opp: realClubName(m[other]) };
+                    const xi = (m[side + '_lineup'] || {}).xi || [];
+                    if (!nextMatch[club] && xi.length) nextMatch[club] = { m, side, opp: realClubName(m[other]) };
                 });
             });
             // Rigori segnati per squadra
@@ -2513,13 +2517,22 @@
                 const [bg, fg] = CLUB_COLORS[c] || ['#334155', '#e2e8f0'];
                 const active = c === _selectedClub;
                 return `<button onclick="selectClub('${c}')" class="flex flex-col items-center gap-1 rounded-xl px-1 py-1.5 border ${active ? 'border-indigo-400 bg-indigo-950/50' : 'border-slate-800 hover:bg-slate-800/60'}">
-                    <span class="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black" style="background:${bg};color:${fg}">${c.slice(0, 3).toUpperCase()}</span>
+                    ${clubLogoHtml(c, 32)}
                     <span class="text-[10px] font-bold ${active ? 'text-white' : 'text-slate-400'} truncate w-full text-center">${c}</span>
                 </button>`;
             }).join('');
             renderClubDetail(_selectedClub);
         }
         function selectClub(c) { _selectedClub = c; renderClubs(); }
+
+        // Stemma del club (dagli indirizzi forniti da Highlightly), con il cerchio colorato come riserva
+        function clubLogoHtml(club, px) {
+            const [bg, fg] = CLUB_COLORS[club] || ['#334155', '#e2e8f0'];
+            const logos = (_realData && _realData.logos) || {};
+            const key = Object.keys(logos).find(n => realClubName(n) === club);
+            const img = key ? `<img src="${escapeHtml(logos[key])}" alt="" loading="lazy" referrerpolicy="no-referrer" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#0f172a" onerror="this.remove()">` : '';
+            return `<span class="relative rounded-full flex items-center justify-center font-black overflow-hidden flex-shrink-0" style="width:${px}px;height:${px}px;font-size:${Math.round(px / 3.2)}px;background:${bg};color:${fg}">${club.slice(0, 3).toUpperCase()}${img}</span>`;
+        }
 
         function clubListonePlayer(club, apiPlayer) {
             const names = [apiPlayer.name, apiPlayer.short].filter(Boolean);
@@ -2551,8 +2564,8 @@
                 const rowsOrder = ['F', 'M', 'D', 'G'];
                 const rows = rowsOrder.map(pos => xi.filter(p => p.pos === pos)).filter(r => r.length);
                 head = `<div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-                    <div class="text-sm font-black text-white">${escapeHtml(club)} <span class="text-slate-400 font-bold">${nm.side === 'home' ? 'vs' : '@'} ${escapeHtml(nm.opp)}</span> <span class="text-[11px] text-slate-400 font-normal">${fmtDate(String(nm.m.date).slice(0, 10))}</span></div>
-                    <div class="text-[11px] text-slate-300">Modulo probabile <b class="text-white">${escapeHtml(lu.formation || '?')}</b>${lu.confidence ? ` · affidabilità <b class="text-white">${Math.round(lu.confidence * 100)}%</b>` : ''} ${nm.m.status === 'predicted' ? '<span class="text-amber-300">(stima)</span>' : ''}</div>
+                    <div class="text-sm font-black text-white flex items-center gap-2">${clubLogoHtml(club, 28)} ${escapeHtml(club)} <span class="text-slate-400 font-bold">${nm.side === 'home' ? 'vs' : '@'}</span> ${clubLogoHtml(nm.opp, 22)} <span class="text-slate-400 font-bold">${escapeHtml(nm.opp)}</span> <span class="text-[11px] text-slate-400 font-normal">${fmtDate(String(nm.m.date).slice(0, 10))}</span></div>
+                    <div class="text-[11px] text-slate-300">Modulo probabile <b class="text-white">${escapeHtml(lu.formation || '?')}</b>${lu.confidence ? ` · affidabilità <b class="text-white">${Math.round(lu.confidence * 100)}%</b>` : ''} ${nm.m.kind === 'last' ? '<span class="text-sky-300">(ultima formazione giocata)</span>' : (nm.m.status === 'predicted' ? '<span class="text-amber-300">(stima)</span>' : '')}</div>
                 </div>`;
                 pitchHtml = `<div class="rounded-2xl p-3 space-y-4" style="background:repeating-linear-gradient(180deg,#4d7c0f 0 44px,#57891a 44px 88px);border:2px solid #3f6212">
                     ${rows.map(r => `<div class="flex justify-center gap-2 flex-wrap">${r.map(p => clubPlayerChip(club, p)).join('')}</div>`).join('')}

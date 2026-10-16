@@ -92,7 +92,12 @@ def main():
     try:
         matches = list_matches()
         print(f"Partite in calendario: {len(matches)}")
+        logos = db.setdefault("logos", {})
         for m in matches:
+            for side in ("homeTeam", "awayTeam"):
+                t = m.get(side) or {}
+                if t.get("name") and t.get("logo"):
+                    logos[t["name"]] = t["logo"]
             mid = str(m["id"])
             state = (m.get("state") or {})
             finished = (state.get("description") or "").lower() == "finished"
