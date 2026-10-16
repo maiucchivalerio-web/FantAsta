@@ -2036,6 +2036,7 @@
             if (!_realData) return null;
             const players = {};      // chiave giocatore API -> statistiche
             const teamMatches = {};  // club -> partite con formazione disponibile
+            const teamPlayed = {};   // club -> partite giocate (anche se la formazione manca nei dati)
             const teamEventMatches = {};
             const key = (p, club) => (p.id != null ? 'i' + p.id : 'n' + normName(p.name)) + '|' + club;
             const get = (p, club) => {
@@ -2044,6 +2045,9 @@
                 return players[k];
             };
             const byId = {};
+            Object.values(_realData.matches || {}).filter(m => m.finished).forEach(m => {
+                [m.home, m.away].forEach(n => { const c = realClubName(n); teamPlayed[c] = (teamPlayed[c] || 0) + 1; });
+            });
             const matches = Object.entries(_realData.matches || {}).filter(([, m]) => m.finished && m.lineups);
             matches.forEach(([mid, m]) => {
                 ['home', 'away'].forEach(side => {
@@ -2107,7 +2111,7 @@
             });
 
             const rounds = [...new Set(matches.map(([, m]) => parseInt(String(m.round).replace(/\D+/g, '')) || 0))].filter(Boolean);
-            return { players, teamMatches, teamEventMatches, listMap, maxRound: rounds.length ? Math.max(...rounds) : 0, updated: _realData.updated };
+            return { players, teamMatches, teamPlayed, teamEventMatches, listMap, maxRound: rounds.length ? Math.max(...rounds) : 0, updated: _realData.updated };
         }
 
         function realStatsFor(lp) {
@@ -2160,7 +2164,8 @@
             const rep = replacementsFor(st);
             const top = obj => Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([k, n]) => `${escapeHtml(idx.players[k]?.name || '?')} (${n})`).join(', ');
             const rows = [];
-            rows.push(`<b class="text-white">Titolare ${st.starts}/${tot}</b>${st.bench ? ` · in panchina ${st.bench}` : ''}${st.goals ? ` · ${st.goals} gol` : ''}${st.pens || st.pensMissed ? ` · rigori ${st.pens}/${st.pens + st.pensMissed}` : ''}`);
+            const missing = (idx.teamPlayed[st.club] || 0) - tot;
+            rows.push(`<b class="text-white">Titolare ${st.starts}/${tot}</b>${missing > 0 ? ` <span class="text-slate-500">(formazione mancante nei dati per ${missing} ${missing === 1 ? 'partita' : 'partite'})</span>` : ''}${st.bench ? ` · in panchina ${st.bench}` : ''}${st.goals ? ` · ${st.goals} gol` : ''}${st.pens || st.pensMissed ? ` · rigori ${st.pens}/${st.pens + st.pensMissed}` : ''}`);
             if (rep.absent) {
                 rows.push(rep.list.length
                     ? `Quando non parte titolare (${rep.absent}): gioca ${rep.list.map(x => `<b class="text-amber-200">${shortApiName(x.o)}</b> (${x.n})`).join(', ')}`

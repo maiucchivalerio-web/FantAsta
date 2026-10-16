@@ -107,7 +107,9 @@ def main():
         todo = sorted((k for k, v in stored.items() if v.get("finished")), key=lambda k: stored[k].get("date") or "")
         # 1) formazioni di tutte le partite giocate, 2) eventi (cambi, gol, rigori)
         for mid in todo:
-            if "lineups" not in stored[mid]:
+            lu_old = stored[mid].get("lineups")
+            empty = lu_old is not None and not all((lu_old.get(side) or {}).get("xi") for side in ("home", "away"))
+            if lu_old is None or empty:  # riprova anche le formazioni arrivate vuote
                 lu = api(f"/lineups/{mid}")
                 stored[mid]["lineups"] = {"home": slim_team(lu.get("homeTeam") or {}), "away": slim_team(lu.get("awayTeam") or {})}
         for mid in todo:
