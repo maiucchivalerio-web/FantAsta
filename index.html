@@ -214,7 +214,7 @@
         <nav class="w-full px-3 sm:px-5 flex items-end gap-1 overflow-x-auto border-t border-slate-800/80">
             <button id="nav-auction" onclick="switchTab('auction')" class="nav-tab tab-active"><i data-lucide="gavel" class="w-4 h-4"></i>Asta Live & Crediti</button>
             <button id="nav-free-agents" onclick="switchTab('free-agents')" class="nav-tab"><i data-lucide="list-checks" class="w-4 h-4"></i>Listone & Note</button>
-            <button id="nav-gk-grid" onclick="switchTab('gk-grid')" class="nav-tab"><i data-lucide="hand" class="w-4 h-4"></i>Griglia Portieri</button>
+            <button id="nav-gk-grid" onclick="switchTab('gk-grid')" class="nav-tab"><i data-lucide="calendar-range" class="w-4 h-4"></i>Griglia & Consigliati</button>
             <button id="nav-teams" onclick="switchTab('teams')" class="nav-tab"><i data-lucide="users" class="w-4 h-4"></i>Rose</button>
             <button id="nav-stats" onclick="switchTab('stats')" class="nav-tab"><i data-lucide="chart-column" class="w-4 h-4"></i>Statistiche</button>
         </nav>
@@ -450,15 +450,37 @@
 
         <!-- TAB 3: GRIGLIA PORTIERI -->
         <div id="view-gk-grid" class="hidden space-y-4 pb-4">
-            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <!-- Filtri comuni -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-wrap items-end gap-3">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Partecipante</label>
+                    <select id="cal-manager" onchange="saveCalPrefs(); renderGkGrid()" class="bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-bold"></select>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Ruolo</label>
+                    <select id="cal-role" onchange="saveCalPrefs(); renderGkGrid()" class="bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-bold"></select>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Conta dalla giornata</label>
+                    <select id="cal-from" onchange="renderGkGrid()" class="bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-bold"></select>
+                </div>
+                <p class="text-[11px] text-slate-500 flex-1 min-w-[220px]">Calendario Serie A <span id="cal-season"></span>. L'obiettivo è alternare: quando una squadra gioca fuori, l'altra gioca in casa.</p>
+            </div>
+
+            <!-- Consigliati per te -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
+                <h2 class="text-sm font-bold text-white flex items-center gap-2"><i data-lucide="sparkles" class="ico w-4 h-4 text-amber-300"></i> Consigliati per te</h2>
+                <div id="cal-recos" class="space-y-3 text-xs"></div>
+            </div>
+
+            <!-- Griglia incroci -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                     <div>
-                        <h2 class="text-base font-bold text-white"><i data-lucide="hand" class="ico w-5 h-5 text-amber-300"></i> Griglia Incroci Portieri Serie A</h2>
-                        <p class="text-xs text-slate-400">I numeri indicano quante volte le due squadre giocano contemporaneamente in casa. Clicca su una cella per analizzare una coppia.</p>
+                        <h2 class="text-sm font-bold text-white flex items-center gap-2"><i data-lucide="grid-3x3" class="ico w-4 h-4 text-amber-300"></i> Griglia incroci casa/casa</h2>
+                        <p class="text-[11px] text-slate-400">Quante giornate le due squadre giocano <b>entrambe in casa</b>: più è basso, meglio si alternano. Clicca una cella per i dettagli.</p>
                     </div>
-                    <div id="gk-selected-info" class="bg-indigo-950/60 border border-indigo-500/40 px-3 py-1.5 rounded-xl text-xs text-indigo-200 hidden">
-                        Coppia selezionata: <strong id="gk-selected-names" class="text-white">Nessuna</strong> | Sovrapposizioni in casa: <strong id="gk-selected-val" class="text-emerald-400 font-mono">-</strong>
-                    </div>
+                    <div id="gk-selected-info" class="bg-indigo-950/60 border border-indigo-500/40 px-3 py-1.5 rounded-xl text-xs text-indigo-200 hidden"></div>
                 </div>
                 <div class="overflow-x-auto border border-slate-800 rounded-xl">
                     <table id="gk-matrix-table" class="w-full text-xs text-center border-collapse"></table>
@@ -1109,29 +1131,55 @@
             }
         }
 
-        const gkTeams = ["Ata", "Bol", "Cag", "Com", "Emp", "Fio", "Gen", "Int", "Juv", "Laz", "Lec", "Mil", "Mon", "Nap", "Par", "Rom", "Tor", "Udi", "Ven", "Ver"];
-        const gkMatrixData = [
-            ["-", 6, 6, 10, 8, 5, 8, 8, 10, 12, 13, 11, 7, 11, 7, 7, 9, 10, 9, 7],
-            [6, "-", 9, 12, 10, 11, 7, 9, 11, 7, 6, 10, 13, 6, 11, 12, 8, 10, 7, 8],
-            [6, 9, "-", 11, 6, 8, 10, 12, 8, 11, 10, 7, 9, 12, 10, 8, 11, 9, 6, 9],
-            [10, 12, 11, "-", 6, 6, 7, 10, 8, 10, 13, 9, 9, 7, 7, 9, 11, 8, 7, 10],
-            [8, 10, 6, 6, "-", 10, 8, 10, 11, 6, 6, 9, 12, 7, 12, 13, 8, 11, 11, 7],
-            [5, 11, 8, 6, 10, "-", 14, 10, 9, 7, 7, 9, 7, 6, 11, 12, 10, 10, 13, 8],
-            [8, 7, 10, 7, 8, 14, "-", 12, 5, 9, 8, 7, 7, 10, 9, 10, 14, 7, 12, 9],
-            [8, 9, 12, 10, 10, 10, 12, "-", 7, 7, 8, 0, 7, 10, 13, 12, 12, 12, 8, 9],
-            [10, 11, 8, 8, 11, 9, 5, 7, "-", 13, 12, 12, 10, 12, 10, 6, 0, 9, 8, 10],
-            [12, 7, 11, 10, 6, 7, 9, 7, 13, "-", 13, 12, 7, 16, 7, 0, 6, 8, 8, 7],
-            [13, 6, 10, 13, 6, 7, 8, 8, 12, 13, "-", 11, 6, 11, 4, 6, 7, 7, 9, 11],
-            [11, 10, 7, 9, 9, 9, 7, 0, 12, 12, 11, "-", 12, 9, 6, 7, 7, 7, 11, 9],
-            [7, 13, 9, 9, 12, 7, 7, 7, 10, 7, 6, 12, "-", 10, 9, 12, 9, 9, 6, 10],
-            [11, 6, 12, 7, 7, 6, 10, 10, 12, 16, 11, 9, 10, "-", 8, 3, 7, 8, 7, 9],
-            [7, 11, 10, 7, 12, 11, 9, 13, 10, 7, 4, 6, 9, 8, "-", 12, 9, 11, 11, 8],
-            [7, 12, 8, 9, 13, 12, 10, 12, 6, 0, 6, 7, 12, 3, 12, "-", 13, 11, 11, 7],
-            [9, 8, 11, 11, 8, 10, 14, 12, 0, 6, 7, 7, 9, 7, 9, 13, "-", 10, 11, 8],
-            [10, 10, 9, 8, 11, 10, 7, 12, 9, 8, 7, 7, 9, 8, 11, 11, 10, "-", 7, 9],
-            [9, 7, 6, 7, 11, 13, 12, 8, 8, 8, 9, 11, 6, 7, 11, 11, 11, 7, "-", 8],
-            [7, 8, 9, 10, 7, 8, 9, 9, 10, 7, 11, 9, 10, 9, 8, 7, 8, 9, 8, "-"]
-        ];
+        // Calendario Serie A 2026/27 (fonte: openfootball/football.json, dati aperti).
+        // Ogni giornata: "data|" + 10 coppie di lettere casa-trasferta, A = SERIE_A_CLUBS[0], B = [1], ...
+        const SERIE_A_SEASON = '2026/27';
+        const SERIE_A_CLUBS = ["Atalanta", "Bologna", "Cagliari", "Como", "Fiorentina", "Frosinone", "Genoa", "Inter", "Juventus", "Lazio", "Lecce", "Milan", "Monza", "Napoli", "Parma", "Roma", "Sassuolo", "Torino", "Udinese", "Venezia"];
+        const SERIE_A_ROUNDS = [
+            "2026-08-22|SDHMGNOCFITKAQRLBJPE",
+            "2026-08-28|LTQRMSEFIONDJGCHKPAB",
+            "2026-09-04|GDERHNPAOMFTBQILCKSJ",
+            "2026-09-11|TEGFJLACKMNBQIDORPHS",
+            "2026-09-18|MQBRSCPHTJENFDOGIALK",
+            "2026-10-10|GEHONFDPKBJMQLCIATRS",
+            "2026-10-16|FQTNBHPGSKEDLAIJMCOR",
+            "2026-10-23|RMCBDQNPJOHEAFGTKISL",
+            "2026-10-27|QJPCRDLBTHOSGIMNFKEA",
+            "2026-10-31|BMSPLHDTFRJCKGINQEAO",
+            "2026-11-06|TSRKCFOBPQNJGLMAHDEI",
+            "2026-11-21|DCJKOPNRQGLFBSAHMEIT",
+            "2026-11-29|QNCLDIPMFORJTBKASEHG",
+            "2026-12-06|GRISFHBPECJALOTQMDNK",
+            "2026-12-13|NLDBSFKQOECTHRIMAGJP",
+            "2026-12-20|LDQOPIFJANEBGSKHRCTM",
+            "2027-01-03|SADKPFONCGRTMLHQBIEJ",
+            "2027-01-06|FBQSGMTPNCLEIRADJHKO",
+            "2027-01-10|EKSNRAMFHIOTBGCQDJPL",
+            "2027-01-17|LROHIGKSCDQMNEJBTFAP",
+            "2027-01-24|KRICHTEQFLPSBAGODNMJ",
+            "2027-01-31|LIMPRFSBQDGKCOAEJTNH",
+            "2027-02-07|IQHCDMKNTGPRAJOFBLES",
+            "2027-02-14|NIMKRQFEBDPOSTGACJHL",
+            "2027-02-21|DRAMSOIBEHQPLGTCKFJN",
+            "2027-02-28|HACSOQGJPTDLREBKMIFN",
+            "2027-03-07|SHARNOKDJFQBMGETLCIP",
+            "2027-03-14|BNCELQGPOKRHFMDSJITA",
+            "2027-03-21|NTSRIDEGOJQCMBHFPKAL",
+            "2027-04-04|KJCNDEQAPBLMGHRITOFS",
+            "2027-04-11|IKNQELJRCAODBTFGHPSM",
+            "2027-04-18|MHEOPJDFQKBCASTILNRG",
+            "2027-04-25|FPCMNSOAJDIEGQKLTRHB",
+            "2027-05-02|AIROLJSGQFBEDHMTKCPN",
+            "2027-05-09|OLGCJQNMHKTDSIRBFAEP",
+            "2027-05-16|NGKEJSBFDAIHQTMOLPCR",
+            "2027-05-23|PDOIRNAKHJSQFCEMTLGB",
+            "2027-05-30|LSIFMRQHCPJEDGNAKTBO"
+        ].map((s, i) => {
+            const [date, pairs] = s.split('|');
+            const matches = [];
+            for (let k = 0; k < pairs.length; k += 2) matches.push([SERIE_A_CLUBS[pairs.charCodeAt(k) - 65], SERIE_A_CLUBS[pairs.charCodeAt(k + 1) - 65]]);
+            return { round: i + 1, date, matches };
+        });
 
         let selectedGkRow = null;
         let selectedGkCol = null;
@@ -1741,7 +1789,7 @@
                 const okCount = Object.values(cov).filter(x => !x.length).length;
                 if (!best || okCount > best.n) best = { m, n: okCount };
                 const mi = getConfig().managers.indexOf(m);
-                html += `<tr class="border-t border-slate-800"><td class="p-1.5 text-left font-bold text-white whitespace-nowrap"><button onclick="openLineupModal(${mi})" class="hover:text-indigo-300 underline decoration-dotted underline-offset-2" title="Apri il campetto"><i data-lucide="shirt" class="ico w-3.5 h-3.5 text-emerald-300"></i> ${escapeHtml(m)}</button></td>`;
+                html += `<tr class="border-t border-slate-800"><td class="p-1.5 text-left font-bold text-white whitespace-nowrap"><button onclick="openLineupModal(${mi})" class="hover:text-indigo-300 underline decoration-dotted underline-offset-2" title="Apri il campetto">${escapeHtml(m)}</button></td>`;
                 modules.forEach(mod => {
                     const miss = cov[mod];
                     const click = `onclick="openLineupModal(${mi}, '${mod}')"`;
@@ -2320,60 +2368,173 @@
             }).join('');
         }
 
+        // --- Calendario: giornate in casa e incroci ---
+        const _homeRoundsCache = {};
+        function homeRounds(club) {
+            if (!_homeRoundsCache[club]) {
+                _homeRoundsCache[club] = SERIE_A_ROUNDS.filter(r => r.matches.some(m => m[0] === club)).map(r => r.round);
+            }
+            return _homeRoundsCache[club];
+        }
+        function calFromRound() { return parseInt(document.getElementById('cal-from').value) || 1; }
+        function roundsInRange() { const f = calFromRound(); return SERIE_A_ROUNDS.filter(r => r.round >= f).length; }
+        // Giornate (dalla giornata scelta) in cui gioca in casa almeno una delle squadre indicate
+        function homeCoverage(clubs) {
+            const f = calFromRound();
+            const set = new Set();
+            clubs.forEach(c => homeRounds(c).forEach(r => { if (r >= f) set.add(r); }));
+            return set.size;
+        }
+        // Giornate in cui le due squadre giocano entrambe in casa
+        function bothHome(a, b) {
+            const f = calFromRound();
+            const hb = new Set(homeRounds(b));
+            return homeRounds(a).filter(r => r >= f && hb.has(r)).length;
+        }
+        // Prima giornata non ancora giocata (in base alle date): proposta come inizio del conteggio
+        function nextRoundByDate() {
+            const today = new Date().toISOString().slice(0, 10);
+            const r = SERIE_A_ROUNDS.find(x => x.date >= today);
+            return r ? r.round : 1;
+        }
+
+        function populateCalControls() {
+            const config = getConfig();
+            let prefs = {};
+            try { prefs = JSON.parse(localStorage.getItem('fantasta_cal_prefs') || '{}'); } catch (e) {}
+            const mSel = document.getElementById('cal-manager');
+            const prevM = mSel.value || prefs.manager;
+            mSel.innerHTML = config.managers.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+            if (config.managers.includes(prevM)) mSel.value = prevM;
+
+            const rSel = document.getElementById('cal-role');
+            const mode = isMantra() ? 'mantra' : 'classic';
+            if (rSel.dataset.mode !== mode) {
+                rSel.dataset.mode = mode;
+                rSel.innerHTML = mode === 'mantra'
+                    ? MANTRA_ROLES.map(r => `<option value="MR_${r}">${r} - ${MANTRA_ROLE_NAMES[r]}</option>`).join('')
+                    : ['POR', 'DIF', 'CEN', 'ATT'].map(r => `<option value="${r}">${r}</option>`).join('');
+                const want = prefs.role && [...rSel.options].some(o => o.value === prefs.role) ? prefs.role : rSel.options[0].value;
+                rSel.value = want;
+            }
+
+            const fSel = document.getElementById('cal-from');
+            if (!fSel.options.length) {
+                const next = nextRoundByDate();
+                fSel.innerHTML = SERIE_A_ROUNDS.map(r => `<option value="${r.round}">${r.round}ª giornata (${r.date.slice(8, 10)}/${r.date.slice(5, 7)})${r.round === next ? ' — prossima' : ''}</option>`).join('');
+                fSel.value = String(next);
+            }
+            document.getElementById('cal-season').innerText = SERIE_A_SEASON;
+        }
+        function saveCalPrefs() {
+            try { localStorage.setItem('fantasta_cal_prefs', JSON.stringify({ manager: document.getElementById('cal-manager').value, role: document.getElementById('cal-role').value })); } catch (e) {}
+        }
+
+        function clubShort(c) { return c.slice(0, 3).toUpperCase(); }
+
+        function renderCalRecos() {
+            const box = document.getElementById('cal-recos');
+            const manager = document.getElementById('cal-manager').value;
+            const roleKey = document.getElementById('cal-role').value;
+            const roleLabel = roleKey.startsWith('MR_') ? roleKey.slice(3) : roleKey;
+            const total = roundsInRange();
+            const mine = manager ? getTeamStats(manager).purchases.filter(p => matchesRoleFilter(p, roleKey)) : [];
+            const known = new Set(SERIE_A_CLUBS);
+            const candidates = getAvailableListone().filter(p => matchesRoleFilter(p, roleKey) && known.has(p.club));
+            const playerRow = (p, extra) => `
+                <div class="flex items-center gap-2 bg-slate-950/60 border border-slate-800 rounded-xl px-2 py-1.5">
+                    ${playerPhotoHtml(p, 'sm')}
+                    <div class="min-w-0 flex-1"><div class="font-bold text-white truncate">${escapeHtml(p.player || p.name)}</div><div class="text-[10px] text-slate-400">${escapeHtml(p.club)}</div></div>
+                    ${roleBadgesHtml(p)}
+                    ${extra || ''}
+                </div>`;
+
+            if (!candidates.length) {
+                box.innerHTML = `<p class="text-slate-500 italic">Nessuno svincolato per il ruolo ${escapeHtml(roleLabel)} (hai importato il listone?).</p>`;
+                return;
+            }
+
+            let html = '';
+            if (mine.length) {
+                const myClubs = [...new Set(mine.map(p => p.club).filter(c => known.has(c)))];
+                const base = homeCoverage(myClubs);
+                html += `<div>
+                    <div class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1.5">I tuoi ${escapeHtml(roleLabel)} — almeno uno in casa in <b class="text-white">${base}/${total}</b> giornate</div>
+                    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-1.5">${mine.map(p => playerRow(p)).join('')}</div>
+                </div>`;
+                // Un solo candidato per squadra (il più quotato): l'alternanza dipende dal club, non dal giocatore
+                const topByClub = {};
+                candidates.forEach(p => { if (!topByClub[p.club] || lineupValue(p) > lineupValue(topByClub[p.club])) topByClub[p.club] = p; });
+                const scored = Object.values(topByClub).map(p => {
+                    const cov = homeCoverage([...myClubs, p.club]);
+                    const overlap = myClubs.reduce((a, c) => a + (c === p.club ? homeRounds(c).filter(r => r >= calFromRound()).length : bothHome(c, p.club)), 0);
+                    return { p, cov, overlap, val: lineupValue(p) };
+                }).sort((a, b) => b.cov - a.cov || b.val - a.val).slice(0, 9);
+                html += `<div>
+                    <div class="text-[10px] font-extrabold uppercase tracking-wider text-emerald-300 mb-1.5">Da affiancare (svincolati, il più quotato per squadra) — si alternano meglio con i tuoi</div>
+                    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-1.5">${scored.map(x => playerRow(x.p, `
+                        <div class="text-right leading-tight pl-1">
+                            <div class="font-mono font-black text-emerald-300">${x.cov}/${total}</div>
+                            <div class="text-[9px] text-slate-400">${x.overlap} insieme · Qt ${x.val}</div>
+                        </div>`)).join('')}</div>
+                    <p class="text-[10px] text-slate-500 mt-1.5">Numero verde = giornate in cui almeno uno tra i tuoi e lui gioca in casa (su ${total}) · "insieme" = giornate in cui gioca in casa insieme a uno dei tuoi.</p>
+                </div>`;
+            } else {
+                // Nessun giocatore in quel ruolo: migliori coppie di squadre, ciascuna con il suo miglior svincolato
+                const bestByClub = {};
+                candidates.forEach(p => { if (!bestByClub[p.club] || lineupValue(p) > lineupValue(bestByClub[p.club])) bestByClub[p.club] = p; });
+                const clubs = Object.keys(bestByClub);
+                const pairs = [];
+                for (let a = 0; a < clubs.length; a++) for (let b = a + 1; b < clubs.length; b++) {
+                    pairs.push({ a: clubs[a], b: clubs[b], both: bothHome(clubs[a], clubs[b]), cov: homeCoverage([clubs[a], clubs[b]]),
+                                 val: lineupValue(bestByClub[clubs[a]]) + lineupValue(bestByClub[clubs[b]]) });
+                }
+                pairs.sort((x, y) => x.both - y.both || y.val - x.val);
+                html += `<p class="text-slate-400">${escapeHtml(manager || 'Questo partecipante')} non ha ancora ${escapeHtml(roleLabel)}: ecco le coppie che si alternano meglio (con il miglior svincolato di ogni squadra).</p>
+                    <div class="grid md:grid-cols-2 gap-2">${pairs.slice(0, 8).map(x => `
+                        <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-2 space-y-1">
+                            <div class="flex justify-between text-[10px] font-bold"><span class="text-slate-300">${escapeHtml(x.a)} + ${escapeHtml(x.b)}</span><span class="text-emerald-300 font-mono">${x.cov}/${total} in casa · ${x.both} insieme</span></div>
+                            ${playerRow(bestByClub[x.a])}${playerRow(bestByClub[x.b])}
+                        </div>`).join('')}</div>`;
+            }
+            box.innerHTML = html;
+        }
+
         function renderGkGrid() {
+            populateCalControls();
+            renderCalRecos();
             const table = document.getElementById('gk-matrix-table');
+            const clubs = SERIE_A_CLUBS;
+            const vals = clubs.map(a => clubs.map(b => (a === b ? null : bothHome(a, b))));
+            const offDiag = vals.flat().filter(v => v !== null);
+            const minVal = Math.min(...offDiag);
+            const lowCut = minVal + 1;
 
-            let minVal = 999;
-            gkMatrixData.forEach((row, i) => {
-                row.forEach((val, j) => {
-                    if (i !== j && val < minVal) {
-                        minVal = val;
-                    }
-                });
-            });
-
-            let html = `<thead><tr class="bg-slate-800 text-slate-300 font-bold"><th class="p-1.5 border border-slate-700">Coppia</th>`;
-            gkTeams.forEach(t => html += `<th class="p-1.5 border border-slate-700 text-[10px]">${t}</th>`);
+            let html = `<thead><tr class="bg-slate-800 text-slate-300 font-bold"><th class="p-1.5 border border-slate-700"></th>`;
+            clubs.forEach(t => html += `<th class="p-1.5 border border-slate-700 text-[10px]" title="${t}">${clubShort(t)}</th>`);
             html += `</tr></thead><tbody>`;
-
-            gkMatrixData.forEach((row, i) => {
-                html += `<tr><td class="p-1.5 font-bold bg-slate-800 text-indigo-400 border border-slate-700">${gkTeams[i]}</td>`;
+            vals.forEach((row, i) => {
+                html += `<tr><td class="p-1.5 font-bold bg-slate-800 text-indigo-300 border border-slate-700 text-left whitespace-nowrap" title="${clubs[i]}">${clubShort(clubs[i])}</td>`;
                 row.forEach((val, j) => {
-                    if (i === j) {
-                        html += `<td class="p-1.5 bg-slate-900 border border-slate-700 text-slate-600">-</td>`;
-                    } else {
-                        let bgClass = 'text-slate-400';
-                        if (val === 0) {
-                            bgClass = 'bg-emerald-950/80 text-emerald-300 font-bold border border-emerald-500/40';
-                        } else if (val === minVal) {
-                            bgClass = 'bg-emerald-900/40 text-emerald-400 font-bold border border-emerald-600/30';
-                        } else if (val <= 5) {
-                            bgClass = 'bg-amber-900/40 text-amber-300';
-                        }
-
-                        let isSelected = (selectedGkRow === i && selectedGkCol === j) || (selectedGkRow === j && selectedGkCol === i);
-                        let selectedClass = isSelected ? 'selected-pair' : '';
-
-                        html += `<td class="p-1.5 border border-slate-800 gk-cell ${bgClass} ${selectedClass}" onclick="selectGkPair(${i}, ${j}, ${val})">${val}</td>`;
-                    }
+                    if (val === null) { html += `<td class="p-1.5 bg-slate-900 border border-slate-800 text-slate-600">-</td>`; return; }
+                    let cls = 'text-slate-400';
+                    if (val === minVal) cls = 'bg-emerald-900/60 text-emerald-300 font-black';
+                    else if (val <= lowCut) cls = 'bg-emerald-950/50 text-emerald-400 font-bold';
+                    const sel = (selectedGkRow === i && selectedGkCol === j) || (selectedGkRow === j && selectedGkCol === i) ? 'selected-pair' : '';
+                    html += `<td class="p-1.5 border border-slate-800 gk-cell ${cls} ${sel}" onclick="selectGkPair(${i}, ${j})" title="${clubs[i]} + ${clubs[j]}">${val}</td>`;
                 });
                 html += `</tr>`;
             });
             table.innerHTML = html + `</tbody>`;
         }
 
-        function selectGkPair(rowIdx, colIdx, val) {
-            selectedGkRow = rowIdx;
-            selectedGkCol = colIdx;
-
-            const infoBox = document.getElementById('gk-selected-info');
-            const namesEl = document.getElementById('gk-selected-names');
-            const valEl = document.getElementById('gk-selected-val');
-
-            namesEl.innerText = `${gkTeams[rowIdx]} + ${gkTeams[colIdx]}`;
-            valEl.innerText = `${val} volte`;
-            infoBox.classList.remove('hidden');
-
+        function selectGkPair(i, j) {
+            selectedGkRow = i;
+            selectedGkCol = j;
+            const a = SERIE_A_CLUBS[i], b = SERIE_A_CLUBS[j];
+            const info = document.getElementById('gk-selected-info');
+            info.innerHTML = `<strong class="text-white">${a} + ${b}</strong>: entrambe in casa <strong class="text-amber-300 font-mono">${bothHome(a, b)}</strong> volte · almeno una in casa <strong class="text-emerald-300 font-mono">${homeCoverage([a, b])}/${roundsInRange()}</strong>`;
+            info.classList.remove('hidden');
             renderGkGrid();
         }
 
