@@ -41,6 +41,14 @@
         .ph-card { width: 112px; height: 150px; border-radius: 14px; font-size: 32px; }
         .ph-card img { object-fit: contain; object-position: bottom center; }
 
+        .pitch { position: relative; width: 100%; aspect-ratio: 3 / 4; border-radius: 14px; overflow: hidden;
+            background: repeating-linear-gradient(180deg, #4d7c0f 0 8.33%, #57891a 8.33% 16.66%); border: 2px solid #3f6212; }
+        .pitch-line { position: absolute; border: 2px solid rgba(255,255,255,.55); }
+        .pitch-slot { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; width: 22%; text-align: center; }
+        .pitch-name { margin-top: 2px; max-width: 100%; font-size: 10px; font-weight: 800; color: #fff; background: rgba(2,6,23,.78); border-radius: 6px; padding: 0 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .pitch-empty { width: 34px; height: 34px; border-radius: 9999px; border: 2px dashed #fca5a5; background: rgba(127,29,29,.55); color: #fecaca; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 900; }
+        .pitch-slot-role { font-size: 8px; font-weight: 900; color: #ecfccb; background: rgba(20,83,45,.85); border-radius: 4px; padding: 0 4px; margin-top: 1px; }
+
         .player-spotlight { background: radial-gradient(120% 140% at 0% 0%, rgba(99,102,241,.28), transparent 55%), linear-gradient(135deg, #111a33, #0d1324); border: 1px solid rgba(99,102,241,.35); }
         .stat-pill { background: rgba(15,23,42,.7); border: 1px solid #1e293b; border-radius: 10px; padding: 4px 8px; text-align: center; }
         .afford-ok { color: #6ee7b7; }
@@ -628,6 +636,23 @@
         </div>
     </div>
 
+    <!-- Modal Campetto: formazione tipo per modulo Mantra -->
+    <div id="lineup-modal" class="fixed inset-0 bg-black/80 hidden items-center justify-center p-3 z-50 backdrop-blur-sm" onclick="if (event.target === this) closeLineupModal()">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-4xl w-full p-4 space-y-3 shadow-2xl max-h-[94vh] overflow-y-auto">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <h3 class="text-sm font-bold text-white">⚽ Formazione tipo —
+                    <select id="lineup-manager" onchange="renderLineupModal()" class="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white font-bold"></select>
+                </h3>
+                <button onclick="closeLineupModal()" class="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 rounded-xl text-slate-300">Chiudi ✕</button>
+            </div>
+            <div id="lineup-module-tabs" class="flex flex-wrap gap-1"></div>
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-start">
+                <div class="md:col-span-3"><div id="lineup-pitch" class="pitch"></div></div>
+                <div id="lineup-side" class="md:col-span-2 space-y-3 text-xs"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Crea Nuovo Anno -->
     <div id="new-anno-modal" class="fixed inset-0 bg-black/80 hidden items-center justify-center p-4 z-50 backdrop-blur-sm">
         <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-5 space-y-3 shadow-2xl">
@@ -710,20 +735,22 @@
         };
         const DEFAULT_MANTRA_ROSTER_SIZE = 30;
 
-        // Moduli ufficiali Mantra 2026/27 (fantacalcio.it/regolamenti/sistema-mantra): ruoli ammessi in ogni posizione
-        const MANTRA_MODULES = {
-            '3-4-3':   ['Por', 'Dc', 'Dc', 'Dc/B', 'E', 'M/C', 'C', 'E', 'W/A', 'W/A', 'A/Pc'],
-            '3-4-1-2': ['Por', 'Dc', 'Dc', 'Dc/B', 'E', 'M/C', 'C', 'E', 'T', 'A/Pc', 'A/Pc'],
-            '3-4-2-1': ['Por', 'Dc', 'Dc', 'Dc/B', 'M', 'M/C', 'E', 'E/W', 'T', 'T/A', 'A/Pc'],
-            '3-5-2':   ['Por', 'Dc', 'Dc', 'Dc/B', 'M', 'M/C', 'C', 'E', 'E/W', 'A/Pc', 'A/Pc'],
-            '3-5-1-1': ['Por', 'Dc', 'Dc', 'Dc/B', 'M', 'M', 'C', 'E/W', 'E/W', 'T/A', 'A/Pc'],
-            '4-3-3':   ['Por', 'Dd', 'Dc', 'Dc', 'Ds', 'M/C', 'M', 'C', 'W/A', 'W/A', 'A/Pc'],
-            '4-3-1-2': ['Por', 'Dd', 'Dc', 'Dc', 'Ds', 'M/C', 'M', 'C', 'T', 'T/A/Pc', 'A/Pc'],
-            '4-4-2':   ['Por', 'Dd', 'Dc', 'Dc', 'Ds', 'M/C', 'C', 'E', 'E/W', 'A/Pc', 'A/Pc'],
-            '4-1-4-1': ['Por', 'Dd', 'Dc', 'Dc', 'Ds', 'M', 'C/T', 'T', 'E/W', 'W', 'A/Pc'],
-            '4-4-1-1': ['Por', 'Dd', 'Dc', 'Dc', 'Ds', 'M', 'C', 'E/W', 'E/W', 'T/A', 'A/Pc'],
-            '4-2-3-1': ['Por', 'Dd', 'Dc', 'Dc', 'Ds', 'M', 'M/C', 'W/T', 'T', 'W/A', 'A/Pc']
+        // Moduli ufficiali Mantra 2026/27 (fantacalcio.it/regolamenti/sistema-mantra).
+        // Per ogni posizione: ruoli ammessi e coordinate sul campetto (x, y in %, portiere in alto come nella grafica ufficiale)
+        const MANTRA_MODULE_LAYOUT = {
+            '3-4-3':   [['Por',50,7], ['Dc',25,21], ['Dc',50,21], ['Dc/B',75,21], ['E',11,44], ['M/C',36,50], ['C',64,50], ['E',89,44], ['W/A',20,74], ['W/A',80,74], ['A/Pc',50,87]],
+            '3-4-1-2': [['Por',50,7], ['Dc',25,21], ['Dc',50,21], ['Dc/B',75,21], ['E',11,44], ['M/C',36,50], ['C',64,50], ['E',89,44], ['T',50,69], ['A/Pc',28,86], ['A/Pc',72,86]],
+            '3-4-2-1': [['Por',50,7], ['Dc',25,21], ['Dc',50,21], ['Dc/B',75,21], ['M',35,43], ['E',87,43], ['M/C',62,52], ['E/W',13,60], ['T',35,72], ['T/A',70,74], ['A/Pc',50,88]],
+            '3-5-2':   [['Por',50,7], ['Dc',25,21], ['Dc',50,21], ['Dc/B',75,21], ['M',55,40], ['E',88,44], ['M/C',33,51], ['C',70,58], ['E/W',13,64], ['A/Pc',30,85], ['A/Pc',70,85]],
+            '3-5-1-1': [['Por',50,7], ['Dc',25,21], ['Dc',50,21], ['Dc/B',75,21], ['M',32,42], ['M',68,42], ['C',50,53], ['E/W',13,64], ['E/W',87,64], ['T/A',50,74], ['A/Pc',50,88]],
+            '4-3-3':   [['Por',50,7], ['Dd',12,21], ['Dc',37,21], ['Dc',63,21], ['Ds',88,21], ['M/C',16,50], ['M',50,50], ['C',84,50], ['W/A',20,74], ['W/A',80,74], ['A/Pc',50,87]],
+            '4-3-1-2': [['Por',50,7], ['Dd',12,21], ['Dc',37,21], ['Dc',63,21], ['Ds',88,21], ['M/C',16,49], ['M',50,49], ['C',84,49], ['T',50,67], ['T/A/Pc',28,81], ['A/Pc',72,81]],
+            '4-4-2':   [['Por',50,7], ['Dd',12,21], ['Dc',37,21], ['Dc',63,21], ['Ds',88,21], ['M/C',33,41], ['E',87,45], ['C',62,51], ['E/W',13,60], ['A/Pc',30,82], ['A/Pc',70,82]],
+            '4-1-4-1': [['Por',50,7], ['Dd',12,21], ['Dc',37,21], ['Dc',63,21], ['Ds',88,21], ['M',50,40], ['C/T',28,56], ['T',73,56], ['E/W',13,71], ['W',87,71], ['A/Pc',50,87]],
+            '4-4-1-1': [['Por',50,7], ['Dd',12,21], ['Dc',37,21], ['Dc',63,21], ['Ds',88,21], ['M',36,49], ['C',64,49], ['E/W',13,65], ['E/W',87,65], ['T/A',50,74], ['A/Pc',50,88]],
+            '4-2-3-1': [['Por',50,7], ['Dd',12,21], ['Dc',37,21], ['Dc',63,21], ['Ds',88,21], ['M',36,49], ['M/C',64,49], ['W/T',14,69], ['T',50,69], ['W/A',86,69], ['A/Pc',50,87]]
         };
+        const MANTRA_MODULES = Object.fromEntries(Object.entries(MANTRA_MODULE_LAYOUT).map(([k, v]) => [k, v.map(x => x[0])]));
 
         // Prova a schierare il modulo con i giocatori dati (abbinamento massimo posizione <-> giocatore,
         // ogni giocatore in una sola posizione). Restituisce le posizioni rimaste scoperte.
@@ -1727,19 +1754,186 @@
             let html = `<thead><tr class="text-slate-400"><th class="p-1.5 text-left">Partecipante</th>${modules.map(m => `<th class="p-1.5 font-mono whitespace-nowrap">${m}</th>`).join('')}</tr></thead><tbody>`;
             getConfig().managers.forEach(m => {
                 const cov = moduleCoverage(getTeamStats(m).purchases);
-                html += `<tr class="border-t border-slate-800"><td class="p-1.5 text-left font-bold text-white whitespace-nowrap">${escapeHtml(m)}</td>`;
+                const mi = getConfig().managers.indexOf(m);
+                html += `<tr class="border-t border-slate-800"><td class="p-1.5 text-left font-bold text-white whitespace-nowrap"><button onclick="openLineupModal(${mi})" class="hover:text-indigo-300 underline decoration-dotted underline-offset-2" title="Apri il campetto">⚽ ${escapeHtml(m)}</button></td>`;
                 modules.forEach(mod => {
                     const miss = cov[mod];
+                    const click = `onclick="openLineupModal(${mi}, '${mod}')"`;
                     if (!miss.length) {
-                        html += `<td class="p-1"><span class="inline-block w-7 rounded-md bg-emerald-900/50 text-emerald-300 font-black">✓</span></td>`;
+                        html += `<td class="p-1"><button ${click} class="inline-block w-7 rounded-md bg-emerald-900/50 text-emerald-300 font-black hover:ring-2 hover:ring-emerald-400" title="Vedi la formazione">✓</button></td>`;
                     } else {
                         const cls = miss.length <= 2 ? 'bg-amber-900/40 text-amber-300' : 'bg-slate-800/70 text-slate-500';
-                        html += `<td class="p-1"><span class="inline-block w-7 rounded-md font-bold cursor-help ${cls}" title="Mancano: ${escapeHtml(miss.join(', '))}">${miss.length}</span></td>`;
+                        html += `<td class="p-1"><button ${click} class="inline-block w-7 rounded-md font-bold hover:ring-2 hover:ring-indigo-400 ${cls}" title="Mancano: ${escapeHtml(miss.join(', '))} — clicca per il campetto">${miss.length}</button></td>`;
                     }
                 });
                 html += `</tr>`;
             });
             document.getElementById('mantra-modules-table').innerHTML = html + `</tbody>`;
+        }
+
+        // --- Campetto: formazione tipo per modulo ---
+        let _lineupModule = '3-4-3';
+
+        // Quotazione da usare per scegliere i titolari: Qt Mantra del listone, poi Qt classica, FVM o prezzo pagato
+        function lineupValue(p) {
+            const id = resolvePlayerId(p);
+            const name = (p.player || p.name || '').toLowerCase();
+            const all = [...(getFaseObj('settembre').listone || []), ...(getFaseObj('riparazione').listone || [])];
+            const lp = all.find(x => (id && String(x.id) === String(id)) || x.name.toLowerCase() === name) || p;
+            return Number(lp.qtM || lp.qt || lp.fvmM || lp.fvm || p.price || 0);
+        }
+
+        // Assegnazione ottima posizioni <-> giocatori (algoritmo ungherese): prima copre più posizioni possibili,
+        // poi massimizza la somma delle quotazioni. Restituisce per ogni posizione l'indice del giocatore o -1.
+        function bestLineup(players, slots) {
+            const n = slots.length, m = Math.max(players.length, n);
+            const slotRoles = slots.map(sl => sl.split('/'));
+            const BIG = 1e6;
+            const cost = (i, j) => {
+                if (j >= players.length) return 0;
+                const roles = players[j].mantraRoles || [];
+                return slotRoles[i].some(r => roles.includes(r)) ? -(BIG + lineupValue(players[j])) : 0;
+            };
+            const u = new Array(n + 1).fill(0), v = new Array(m + 1).fill(0), pRow = new Array(m + 1).fill(0), way = new Array(m + 1).fill(0);
+            for (let i = 1; i <= n; i++) {
+                pRow[0] = i;
+                let j0 = 0;
+                const minv = new Array(m + 1).fill(Infinity), used = new Array(m + 1).fill(false);
+                do {
+                    used[j0] = true;
+                    const i0 = pRow[j0];
+                    let delta = Infinity, j1 = 0;
+                    for (let j = 1; j <= m; j++) {
+                        if (used[j]) continue;
+                        const cur = cost(i0 - 1, j - 1) - u[i0] - v[j];
+                        if (cur < minv[j]) { minv[j] = cur; way[j] = j0; }
+                        if (minv[j] < delta) { delta = minv[j]; j1 = j; }
+                    }
+                    for (let j = 0; j <= m; j++) {
+                        if (used[j]) { u[pRow[j]] += delta; v[j] -= delta; } else minv[j] -= delta;
+                    }
+                    j0 = j1;
+                } while (pRow[j0] !== 0);
+                do { const j1 = way[j0]; pRow[j0] = pRow[j1]; j0 = j1; } while (j0);
+            }
+            const result = new Array(n).fill(-1);
+            for (let j = 1; j <= m; j++) {
+                const i = pRow[j];
+                if (i && j - 1 < players.length && cost(i - 1, j - 1) < 0) result[i - 1] = j - 1;
+            }
+            return result;
+        }
+
+        function openLineupModal(managerIdx, moduleName) {
+            const managers = getConfig().managers;
+            const sel = document.getElementById('lineup-manager');
+            sel.innerHTML = managers.map((m, i) => `<option value="${i}">${escapeHtml(m)}</option>`).join('');
+            sel.value = String(managerIdx >= 0 ? managerIdx : 0);
+            if (moduleName && MANTRA_MODULE_LAYOUT[moduleName]) {
+                _lineupModule = moduleName;
+            } else {
+                // Senza modulo indicato: apre quello più vicino a essere completo
+                const cov = moduleCoverage(getTeamStats(managers[sel.value]).purchases);
+                _lineupModule = Object.keys(cov).sort((a, b) => cov[a].length - cov[b].length)[0];
+            }
+            renderLineupModal();
+            document.getElementById('lineup-modal').classList.remove('hidden');
+            document.getElementById('lineup-modal').classList.add('flex');
+        }
+        function closeLineupModal() {
+            document.getElementById('lineup-modal').classList.add('hidden');
+            document.getElementById('lineup-modal').classList.remove('flex');
+        }
+        function selectLineupModule(mod) { _lineupModule = mod; renderLineupModal(); }
+
+        function renderLineupModal() {
+            const modal = document.getElementById('lineup-modal');
+            if (!modal || !document.getElementById('lineup-manager').options.length) return;
+            const manager = getConfig().managers[parseInt(document.getElementById('lineup-manager').value) || 0];
+            if (!manager) return;
+            const team = getTeamStats(manager).purchases.filter(p => p.mantraRoles && p.mantraRoles.length);
+            const cov = moduleCoverage(team);
+
+            document.getElementById('lineup-module-tabs').innerHTML = Object.keys(MANTRA_MODULE_LAYOUT).map(mod => {
+                const miss = cov[mod].length;
+                const active = mod === _lineupModule;
+                const base = active ? 'bg-indigo-600 text-white border-indigo-400' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700';
+                const badge = miss ? `<span class="ml-1 text-[9px] px-1 rounded bg-amber-900/70 text-amber-300">-${miss}</span>` : `<span class="ml-1 text-emerald-300">✓</span>`;
+                return `<button onclick="selectLineupModule('${mod}')" class="px-2 py-1 rounded-lg border text-[11px] font-mono font-bold ${base}">${mod}${badge}</button>`;
+            }).join('');
+
+            const layout = MANTRA_MODULE_LAYOUT[_lineupModule];
+            const assign = bestLineup(team, layout.map(x => x[0]));
+
+            let pitch = `
+                <div class="pitch-line" style="left:4%;right:4%;top:3%;bottom:3%"></div>
+                <div class="pitch-line" style="left:4%;right:4%;top:50%;border-width:2px 0 0 0"></div>
+                <div class="pitch-line" style="left:37%;width:26%;top:42.5%;height:15%;border-radius:9999px"></div>
+                <div class="pitch-line" style="left:24%;width:52%;top:3%;height:13%;border-top:0"></div>
+                <div class="pitch-line" style="left:24%;width:52%;bottom:3%;height:13%;border-bottom:0"></div>`;
+            layout.forEach(([slot, x, y], si) => {
+                const pi = assign[si];
+                if (pi >= 0) {
+                    const pl = team[pi];
+                    pitch += `<div class="pitch-slot" style="left:${x}%;top:${y}%">
+                        ${playerPhotoHtml(pl, 'md')}
+                        <span class="pitch-name" title="${escapeHtml(pl.player)} (${lineupValue(pl)})">${escapeHtml(pl.player)}</span>
+                        <span class="pitch-slot-role">${slot}</span>
+                    </div>`;
+                } else {
+                    pitch += `<div class="pitch-slot" style="left:${x}%;top:${y}%" title="Posizione scoperta: serve un ${slot}">
+                        <span class="pitch-empty">${slot}</span>
+                        <span class="pitch-name" style="background:rgba(127,29,29,.9)">Manca</span>
+                    </div>`;
+                }
+            });
+            document.getElementById('lineup-pitch').innerHTML = pitch;
+
+            // Colonna laterale: posizioni da coprire (con i migliori svincolati adatti) e panchina
+            const missingIdx = layout.map((_, si) => si).filter(si => assign[si] < 0);
+            const available = getAvailableListone().filter(p => p.mantraRoles);
+            let side = '';
+            if (missingIdx.length) {
+                side += `<div class="bg-red-950/40 border border-red-700/40 rounded-xl p-2.5 space-y-2">
+                    <div class="font-bold text-red-200">🎯 Da prendere per il ${_lineupModule}</div>`;
+                missingIdx.forEach(si => {
+                    const slot = layout[si][0];
+                    const need = slot.split('/');
+                    const options = available.filter(p => p.mantraRoles.some(r => need.includes(r)))
+                        .sort((a, b) => lineupValue(b) - lineupValue(a)).slice(0, 4);
+                    side += `<div>
+                        <div class="text-[11px] text-slate-300 mb-1">Posizione <strong class="text-white">${slot}</strong> — migliori svincolati:</div>
+                        <div class="space-y-1">${options.length ? options.map(o => `
+                            <div class="flex items-center gap-1.5 bg-slate-900/70 rounded-lg px-1.5 py-1">
+                                ${playerPhotoHtml(o, 'xs')}
+                                <span class="font-bold text-white truncate flex-1">${escapeHtml(o.name)}</span>
+                                ${roleBadgesHtml(o)}
+                                <span class="font-mono text-indigo-300 text-[10px] w-6 text-right">${lineupValue(o)}</span>
+                            </div>`).join('') : '<div class="text-[11px] text-slate-500 italic">Nessuno svincolato adatto.</div>'}
+                        </div>
+                    </div>`;
+                });
+                side += `</div>`;
+            } else {
+                side += `<div class="bg-emerald-950/40 border border-emerald-700/40 rounded-xl p-2.5 font-bold text-emerald-300">✅ ${escapeHtml(manager)} può già schierare il ${_lineupModule}.</div>`;
+            }
+
+            const usedSet = new Set(assign.filter(x => x >= 0));
+            const bench = getTeamStats(manager).purchases.filter(p => !usedSet.has(team.indexOf(p)))
+                .sort((a, b) => lineupValue(b) - lineupValue(a));
+            side += `<div class="bg-slate-950/60 border border-slate-800 rounded-xl p-2.5">
+                <div class="font-bold text-slate-200 mb-1.5">🪑 Panchina (${bench.length})</div>
+                <div class="space-y-1">${bench.length ? bench.map(b => `
+                    <div class="flex items-center gap-1.5">
+                        ${playerPhotoHtml(b, 'xs')}
+                        <span class="text-slate-200 truncate flex-1">${escapeHtml(b.player)}</span>
+                        ${roleBadgesHtml(b)}
+                        <span class="font-mono text-slate-400 text-[10px] w-6 text-right">${lineupValue(b)}</span>
+                    </div>`).join('') : '<div class="text-[11px] text-slate-500 italic">Nessuno.</div>'}
+                </div>
+                <div class="text-[10px] text-slate-500 mt-2">I titolari sono scelti per coprire più posizioni possibili e, a parità, con la quotazione Mantra più alta.</div>
+            </div>`;
+            document.getElementById('lineup-side').innerHTML = side;
         }
 
         // Annulla l'ultimo acquisto registrato nella fase corrente
@@ -2257,7 +2451,7 @@
                                 <span class="text-[8px] font-bold px-1.5 py-0.2 rounded border ${badgeClass}">${badgeText}</span>
                             </div>
                             ${isMantra() ? `
-                            <div class="text-[10px] text-slate-400 mb-1 flex justify-between gap-1"><span>Rosa: <strong class="text-indigo-300 font-mono">${stats.totalPlayers}/${stats.totalSlots}</strong></span><span title="Moduli Mantra già schierabili">🧩 <strong class="text-emerald-300 font-mono">${Object.values(moduleCoverage(stats.purchases)).filter(m => !m.length).length}/${Object.keys(MANTRA_MODULES).length}</strong></span></div>
+                            <div class="text-[10px] text-slate-400 mb-1 flex justify-between gap-1"><span>Rosa: <strong class="text-indigo-300 font-mono">${stats.totalPlayers}/${stats.totalSlots}</strong></span><button onclick="openLineupModal(${config.managers.indexOf(m)})" class="hover:underline" title="Moduli Mantra già schierabili — clicca per il campetto">🧩 <strong class="text-emerald-300 font-mono">${Object.values(moduleCoverage(stats.purchases)).filter(m => !m.length).length}/${Object.keys(MANTRA_MODULES).length}</strong></button></div>
                             <div class="flex items-center gap-0.5 mb-1 flex-wrap" title="Giocatori in rosa che possono coprire ciascun ruolo">
                                 ${MANTRA_ROLES.map(r => `<span class="mr-chip mr-${r} ${stats.mantraCoverage[r] ? '' : 'mr-zero'}" title="${MANTRA_ROLE_NAMES[r]}">${r}:${stats.mantraCoverage[r]}</span>`).join('')}
                             </div>` : `
@@ -2565,6 +2759,7 @@
             renderSelectedRoleField();
             renderTeamsOverview();
             renderMantraModules();
+            if (!document.getElementById('lineup-modal').classList.contains('hidden')) renderLineupModal();
             renderLiveHistory();
             renderGoogleSheetsTable();
             renderFullTeamsTable();
