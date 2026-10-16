@@ -147,10 +147,63 @@ def main():
         ex = next(v["items"][0] for v in pens.values() if v["items"])
         print("Esempio incidente rigore:", json.dumps(ex, ensure_ascii=False)[:600])
 
+    # 4) Classifica (per la difficoltà del calendario)
+    standings = []
+    st = api(f"/api/v2/leagues/{LEAGUE_ID}/standings/") or {}
+    rows = st.get("standings") or st.get("results") or st.get("table") or (st if isinstance(st, list) else [])
+    if rows and isinstance(rows[0], dict) and isinstance(rows[0].get("rows") or rows[0].get("table"), list):
+        rows = rows[0].get("rows") or rows[0].get("table")
+    if rows:
+        print(f"Campi classifica: {sorted(rows[0].keys())[:20]}")
+    for r in rows:
+        team = r.get("team")
+        name = team.get("name") if isinstance(team, dict) else (r.get("team_name") or team)
+        standings.append({"team": name, "pos": r.get("position") or r.get("rank"), "pts": r.get("points") or r.get("pts"),
+                          "played": r.get("played") or r.get("matches_played"), "gf": r.get("goals_for"), "ga": r.get("goals_against")})
+    print(f"Classifica: {len(standings)} squadre")
+
+    # 5) Statistiche per giocatore di ogni partita giocata (incrementale) -> fantamedia stimata
+    pstats = old.get("player_stats", {})
+    team_names = {}
+    for ev in finished:
+        team_names[ev.get("home_team_id")] = ev.get("home_team")
+        team_names[ev.get("away_team_id")] = ev.get("away_team")
+    shown_keys = False
+    for ev in finished:
+        eid = str(ev["id"])
+        if eid in pstats:
+            continue
+        items, page = [], 1
+        while page <= 5:
+            data = api("/api/player-stats/", {"event": eid, "page": page}) or {}
+            batch = data.get("results") or []
+            items.extend(batch)
+            if not data.get("next") or not batch:
+                break
+            page += 1
+        if items and not shown_keys:
+            print(f"Campi statistiche giocatore: {sorted(items[0].keys())[:45]}")
+            print(f"Esempio player: {json.dumps(items[0].get('player'), ensure_ascii=False)[:300]}")
+            shown_keys = True
+        rows_ev = []
+        for it in items:
+            pl = it.get("player") or {}
+            team = pl.get("team") if isinstance(pl, dict) else None
+            tname = team.get("name") if isinstance(team, dict) else team_names.get(team) or team_names.get(it.get("team_id"))
+            rows_ev.append({
+                "name": pl.get("name"), "short": pl.get("short_name"), "pos": pl.get("position"), "team": tname,
+                "min": it.get("minutes_played"), "rating": it.get("rating"), "g": it.get("goals"), "a": it.get("goal_assist"),
+                "yc": it.get("yellow_card"), "rc": it.get("red_card"), "pm": it.get("penalty_miss"), "ps": it.get("penalty_save"),
+                "gc": it.get("goals_conceded"),
+            })
+        pstats[eid] = {"home": ev.get("home_team"), "away": ev.get("away_team"), "round": ev.get("round_number"), "players": rows_ev}
+    print(f"Statistiche giocatori: {len(pstats)} partite, {sum(len(v['players']) for v in pstats.values())} righe")
+
     os.makedirs("data", exist_ok=True)
     with open(PATH, "w", encoding="utf-8") as f:
         json.dump({"updated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                   "squads": squads, "predicted": predicted, "penalties": pens, "logos": logos},
+                   "squads": squads, "predicted": predicted, "penalties": pens, "logos": logos,
+                   "standings": standings, "player_stats": pstats},
                   f, ensure_ascii=False, separators=(",", ":"))
     injured = sum(1 for s in squads.values() for p in s if (p.get("availability") or "").lower() not in ("", "available", "none"))
     print(f"Giocatori non disponibili nelle rose: {injured}")
