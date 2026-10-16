@@ -18,4 +18,4 @@ jobs:
       - name: Prova accesso Serie A
         env:
           BSD_KEY: ${{ secrets.BSD_KEY }}
-        run: python scripts/probe_bsd.py
+        run: python scripts/probe_bsd.py && python scripts/probe_bsd2.py
