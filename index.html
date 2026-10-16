@@ -367,6 +367,17 @@
                 <div id="teams-overview-grid" class="flex flex-row gap-2 w-full pt-4 pb-2 overflow-x-auto overflow-y-visible"></div>
             </div>
 
+            <!-- Moduli Mantra coperti da ogni rosa (solo in modalità Mantra) -->
+            <div id="mantra-modules-panel" class="hidden bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1">
+                    <h2 class="text-sm font-bold text-white">🧩 Moduli Mantra coperti</h2>
+                    <span class="text-[10px] text-slate-400">✓ = modulo schierabile con la rosa attuale · numero = posizioni ancora scoperte (passa sopra per vedere quali)</span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table id="mantra-modules-table" class="w-full text-[11px] text-center border-collapse"></table>
+                </div>
+            </div>
+
             <!-- Tabellone Rose e Reparti -->
             <div class="bg-slate-950 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
                 <div class="flex justify-between items-center border-b border-slate-800 pb-2.5">
@@ -698,6 +709,51 @@
             E: 'Esterno', M: 'Mediano', C: 'Centrocampista', W: 'Ala', T: 'Trequartista', A: 'Attaccante', Pc: 'Punta centrale'
         };
         const DEFAULT_MANTRA_ROSTER_SIZE = 30;
+
+        // Moduli ufficiali Mantra 2026/27 (fantacalcio.it/regolamenti/sistema-mantra): ruoli ammessi in ogni posizione
+        const MANTRA_MODULES = {
+            '3-4-3':   ['Por', 'Dc', 'Dc', 'Dc/B', 'E', 'M/C', 'C', 'E', 'W/A', 'W/A', 'A/Pc'],
+            '3-4-1-2': ['Por', 'Dc', 'Dc', 'Dc/B', 'E', 'M/C', 'C', 'E', 'T', 'A/Pc', 'A/Pc'],
+            '3-4-2-1': ['Por', 'Dc', 'Dc', 'Dc/B', 'M', 'M/C', 'E', 'E/W', 'T', 'T/A', 'A/Pc'],
+            '3-5-2':   ['Por', 'Dc', 'Dc', 'Dc/B', 'M', 'M/C', 'C', 'E', 'E/W', 'A/Pc', 'A/Pc'],
+            '3-5-1-1': ['Por', 'Dc', 'Dc', 'Dc/B', 'M', 'M', 'C', 'E/W', 'E/W', 'T/A', 'A/Pc'],
+            '4-3-3':   ['Por', 'Dd', 'Dc', 'Dc', 'Ds', 'M/C', 'M', 'C', 'W/A', 'W/A', 'A/Pc'],
+            '4-3-1-2': ['Por', 'Dd', 'Dc', 'Dc', 'Ds', 'M/C', 'M', 'C', 'T', 'T/A/Pc', 'A/Pc'],
+            '4-4-2':   ['Por', 'Dd', 'Dc', 'Dc', 'Ds', 'M/C', 'C', 'E', 'E/W', 'A/Pc', 'A/Pc'],
+            '4-1-4-1': ['Por', 'Dd', 'Dc', 'Dc', 'Ds', 'M', 'C/T', 'T', 'E/W', 'W', 'A/Pc'],
+            '4-4-1-1': ['Por', 'Dd', 'Dc', 'Dc', 'Ds', 'M', 'C', 'E/W', 'E/W', 'T/A', 'A/Pc'],
+            '4-2-3-1': ['Por', 'Dd', 'Dc', 'Dc', 'Ds', 'M', 'M/C', 'W/T', 'T', 'W/A', 'A/Pc']
+        };
+
+        // Prova a schierare il modulo con i giocatori dati (abbinamento massimo posizione <-> giocatore,
+        // ogni giocatore in una sola posizione). Restituisce le posizioni rimaste scoperte.
+        function missingSlotsForModule(rolesList, slots) {
+            const slotRoles = slots.map(sl => sl.split('/'));
+            const playerOfSlot = new Array(slots.length).fill(-1);
+            const slotOfPlayer = new Array(rolesList.length).fill(-1);
+            const tryAssign = (pi, seen) => {
+                for (let si = 0; si < slots.length; si++) {
+                    if (seen[si] || !slotRoles[si].some(r => rolesList[pi].includes(r))) continue;
+                    seen[si] = true;
+                    if (playerOfSlot[si] === -1 || tryAssign(playerOfSlot[si], seen)) {
+                        playerOfSlot[si] = pi;
+                        slotOfPlayer[pi] = si;
+                        return true;
+                    }
+                }
+                return false;
+            };
+            for (let pi = 0; pi < rolesList.length; pi++) tryAssign(pi, new Array(slots.length).fill(false));
+            return slots.filter((_, si) => playerOfSlot[si] === -1);
+        }
+
+        // Per una lista di giocatori (acquisti) calcola, modulo per modulo, le posizioni scoperte
+        function moduleCoverage(players) {
+            const rolesList = players.map(p => p.mantraRoles || []).filter(r => r.length);
+            const out = {};
+            Object.entries(MANTRA_MODULES).forEach(([name, slots]) => { out[name] = missingSlotsForModule(rolesList, slots); });
+            return out;
+        }
 
         function isMantra() { return getConfig().mode === 'mantra'; }
 
@@ -1637,8 +1693,53 @@
                     <div class="flex flex-wrap gap-1">
                         ${bidders.map(b => `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-slate-900/80 border border-slate-800 ${!b.blocked && b.max >= price ? 'afford-ok' : 'afford-no'}" title="${b.blocked || ''}">${escapeHtml(b.m)} ${b.blocked ? '—' : b.max + '€'}</span>`).join('')}
                     </div>
-                </div>`;
+                </div>
+                ${mantra ? spotlightModulesHtml(p, bidders) : ''}`;
             box.classList.remove('hidden');
+        }
+
+        // In Mantra: a chi questo giocatore farebbe "sbloccare" nuovi moduli
+        function spotlightModulesHtml(p, bidders) {
+            if (!p.mantraRoles || !p.mantraRoles.length) return '';
+            const gains = bidders.filter(b => !b.blocked).map(b => {
+                const team = getTeamStats(b.m).purchases;
+                const before = moduleCoverage(team);
+                const after = moduleCoverage([...team, p]);
+                const unlocked = Object.keys(after).filter(k => before[k].length && !after[k].length);
+                return { m: b.m, unlocked };
+            }).filter(g => g.unlocked.length);
+            if (!gains.length) return '';
+            return `
+                <div class="mt-2">
+                    <div class="text-[9px] text-slate-400 uppercase font-extrabold tracking-wider mb-1">🧩 Completerebbe un modulo per</div>
+                    <div class="flex flex-wrap gap-1">
+                        ${gains.map(g => `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-950/60 border border-emerald-700/40 text-emerald-300">${escapeHtml(g.m)}: ${g.unlocked.join(', ')}</span>`).join('')}
+                    </div>
+                </div>`;
+        }
+
+        // Tabella partecipanti x moduli: ✓ se schierabile, altrimenti quante posizioni mancano
+        function renderMantraModules() {
+            const panel = document.getElementById('mantra-modules-panel');
+            if (!isMantra()) { panel.classList.add('hidden'); return; }
+            panel.classList.remove('hidden');
+            const modules = Object.keys(MANTRA_MODULES);
+            let html = `<thead><tr class="text-slate-400"><th class="p-1.5 text-left">Partecipante</th>${modules.map(m => `<th class="p-1.5 font-mono whitespace-nowrap">${m}</th>`).join('')}</tr></thead><tbody>`;
+            getConfig().managers.forEach(m => {
+                const cov = moduleCoverage(getTeamStats(m).purchases);
+                html += `<tr class="border-t border-slate-800"><td class="p-1.5 text-left font-bold text-white whitespace-nowrap">${escapeHtml(m)}</td>`;
+                modules.forEach(mod => {
+                    const miss = cov[mod];
+                    if (!miss.length) {
+                        html += `<td class="p-1"><span class="inline-block w-7 rounded-md bg-emerald-900/50 text-emerald-300 font-black">✓</span></td>`;
+                    } else {
+                        const cls = miss.length <= 2 ? 'bg-amber-900/40 text-amber-300' : 'bg-slate-800/70 text-slate-500';
+                        html += `<td class="p-1"><span class="inline-block w-7 rounded-md font-bold cursor-help ${cls}" title="Mancano: ${escapeHtml(miss.join(', '))}">${miss.length}</span></td>`;
+                    }
+                });
+                html += `</tr>`;
+            });
+            document.getElementById('mantra-modules-table').innerHTML = html + `</tbody>`;
         }
 
         // Annulla l'ultimo acquisto registrato nella fase corrente
@@ -2156,7 +2257,7 @@
                                 <span class="text-[8px] font-bold px-1.5 py-0.2 rounded border ${badgeClass}">${badgeText}</span>
                             </div>
                             ${isMantra() ? `
-                            <div class="text-[10px] text-slate-400 mb-1">Rosa: <strong class="text-indigo-300 font-mono">${stats.totalPlayers}/${stats.totalSlots}</strong></div>
+                            <div class="text-[10px] text-slate-400 mb-1 flex justify-between gap-1"><span>Rosa: <strong class="text-indigo-300 font-mono">${stats.totalPlayers}/${stats.totalSlots}</strong></span><span title="Moduli Mantra già schierabili">🧩 <strong class="text-emerald-300 font-mono">${Object.values(moduleCoverage(stats.purchases)).filter(m => !m.length).length}/${Object.keys(MANTRA_MODULES).length}</strong></span></div>
                             <div class="flex items-center gap-0.5 mb-1 flex-wrap" title="Giocatori in rosa che possono coprire ciascun ruolo">
                                 ${MANTRA_ROLES.map(r => `<span class="mr-chip mr-${r} ${stats.mantraCoverage[r] ? '' : 'mr-zero'}" title="${MANTRA_ROLE_NAMES[r]}">${r}:${stats.mantraCoverage[r]}</span>`).join('')}
                             </div>` : `
@@ -2463,6 +2564,7 @@
             renderOwnerSelect();
             renderSelectedRoleField();
             renderTeamsOverview();
+            renderMantraModules();
             renderLiveHistory();
             renderGoogleSheetsTable();
             renderFullTeamsTable();
