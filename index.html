@@ -648,7 +648,7 @@
             <div id="lineup-module-tabs" class="flex flex-wrap gap-1"></div>
             <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-start">
                 <div class="md:col-span-3"><div id="lineup-pitch" class="pitch"></div></div>
-                <div id="lineup-side" class="md:col-span-2 space-y-3 text-xs"></div>
+                <div id="lineup-side" class="md:col-span-2 space-y-3 text-xs md:overflow-y-auto md:pr-1"></div>
             </div>
         </div>
     </div>
@@ -1896,13 +1896,15 @@
             if (missingIdx.length) {
                 side += `<div class="bg-red-950/40 border border-red-700/40 rounded-xl p-2.5 space-y-2">
                     <div class="font-bold text-red-200">🎯 Da prendere per il ${_lineupModule}</div>`;
-                missingIdx.forEach(si => {
-                    const slot = layout[si][0];
+                // Posizioni con gli stessi ruoli ammessi (es. due Dc) mostrate una volta sola con "×2"
+                const missingGroups = {};
+                missingIdx.forEach(si => { const k = layout[si][0]; missingGroups[k] = (missingGroups[k] || 0) + 1; });
+                Object.entries(missingGroups).forEach(([slot, count]) => {
                     const need = slot.split('/');
                     const options = available.filter(p => p.mantraRoles.some(r => need.includes(r)))
-                        .sort((a, b) => lineupValue(b) - lineupValue(a)).slice(0, 4);
+                        .sort((a, b) => lineupValue(b) - lineupValue(a)).slice(0, 3 + count);
                     side += `<div>
-                        <div class="text-[11px] text-slate-300 mb-1">Posizione <strong class="text-white">${slot}</strong> — migliori svincolati:</div>
+                        <div class="text-[11px] text-slate-300 mb-1">Posizione <strong class="text-white">${slot}</strong>${count > 1 ? ` <strong class="text-amber-300">×${count}</strong>` : ''} — migliori svincolati:</div>
                         <div class="space-y-1">${options.length ? options.map(o => `
                             <div class="flex items-center gap-1.5 bg-slate-900/70 rounded-lg px-1.5 py-1">
                                 ${playerPhotoHtml(o, 'xs')}
@@ -1934,7 +1936,17 @@
                 <div class="text-[10px] text-slate-500 mt-2">I titolari sono scelti per coprire più posizioni possibili e, a parità, con la quotazione Mantra più alta.</div>
             </div>`;
             document.getElementById('lineup-side').innerHTML = side;
+            syncLineupSideHeight();
         }
+
+        // Su schermi larghi la colonna laterale è alta quanto il campetto e scorre al suo interno
+        function syncLineupSideHeight() {
+            const side = document.getElementById('lineup-side');
+            const pitch = document.getElementById('lineup-pitch');
+            if (!side || !pitch) return;
+            side.style.maxHeight = window.innerWidth >= 768 ? pitch.offsetHeight + 'px' : '';
+        }
+        window.addEventListener('resize', syncLineupSideHeight);
 
         // Annulla l'ultimo acquisto registrato nella fase corrente
         function undoLastPurchase() {
