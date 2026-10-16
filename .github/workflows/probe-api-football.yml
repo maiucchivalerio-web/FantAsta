@@ -1,0 +1,26 @@
+name: Prova API-Football
+
+# Avvio solo manuale: verifica cosa include il piano per la Serie A (circa 6 richieste)
+on:
+  workflow_dispatch:
+    inputs:
+      season:
+        description: "Anno di inizio stagione (2026 = 2026/27)"
+        default: "2026"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Prova accesso Serie A
+        env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          SEASON: ${{ github.event.inputs.season }}
+        run: python scripts/probe_api_football.py
