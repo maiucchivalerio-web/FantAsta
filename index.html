@@ -2170,7 +2170,7 @@
             }
             if (evTot) {
                 if (Object.keys(st.offFor).length) rows.push(`Quando esce entra: ${top(st.offFor)}`);
-                if (st.subOn) rows.push(`Subentrato ${st.subOn} volte${Object.keys(st.onFor).length ? ` (al posto di ${top(st.onFor)})` : ''}`);
+                if (st.subOn) rows.push(`Subentrato ${st.subOn} ${st.subOn === 1 ? 'volta' : 'volte'}${Object.keys(st.onFor).length ? ` (al posto di ${top(st.onFor)})` : ''}`);
                 if (evTot < tot) rows.push(`<span class="text-slate-500">Cambi disponibili per ${evTot}/${tot} partite</span>`);
             }
             return `<div class="mt-2 bg-slate-950/50 border border-slate-800 rounded-xl p-2">${head}<div class="space-y-0.5 text-[11px] text-slate-300">${rows.map(r => `<div>${r}</div>`).join('')}</div></div>`;

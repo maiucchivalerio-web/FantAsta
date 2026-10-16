@@ -15,6 +15,7 @@ BASE = "https://soccer.highlightly.net"
 KEY = os.environ.get("HIGHLIGHTLY_KEY", "")
 SEASON = os.environ.get("SEASON", "2026")
 MATCH_DATE = os.environ.get("MATCH_DATE", "")  # es. 2026-10-11: giorno con partite già giocate
+MATCH_ID = os.environ.get("MATCH_ID", "")  # se impostato: esplora i dettagli di questa partita (rigori, infortuni)
 DOCS = [
     "https://highlightly.net/football-api/documentation/",
     "https://highlightly.net/football-api/",
@@ -88,6 +89,25 @@ log("- " + (", ".join(sorted(paths)) if paths else "nessun endpoint estratto"))
 if not KEY:
     log("ERRORE: il segreto HIGHLIGHTLY_KEY non è impostato nel repository.")
     raise SystemExit(1)
+
+if MATCH_ID:
+    # Esplorazione dettagli: cerca campi su rigori, infortuni, minuti, motivi dei cambi
+    _, match = api(f"/matches/{MATCH_ID}", limit=6000)
+    _, box = api(f"/box-score/{MATCH_ID}", limit=6000)
+    blob = json.dumps([match, box]).lower()
+    for word in ("penalt", "injur", "minutes", "rating", "missed", "reason", "unavailable", "suspend"):
+        log(f"- '{word}' presente nelle risposte: {word in blob}")
+    pid = None
+    for team in (box if isinstance(box, list) else []):
+        for pl in (team.get("players") or []) if isinstance(team, dict) else []:
+            pid = pl.get("id") or (pl.get("player") or {}).get("id")
+            if pid:
+                break
+        if pid:
+            break
+    if pid:
+        api(f"/players/{pid}", limit=4000)
+    raise SystemExit(0)
 
 # Campionato: cerca Serie A in Italia
 _, leagues = api("/leagues", {"countryCode": "IT"})
