@@ -2121,6 +2121,17 @@
         }
         function fmtDate(d) { return d ? `${d.slice(8, 10)}/${d.slice(5, 7)}` : ''; }
 
+        // BSD arrotonda quasi tutte le date di rientro a fasce (fine mese, il 10, il 20): le mostriamo come stime
+        const MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+        function fmtReturn(d) {
+            if (!d) return '';
+            const y = +d.slice(0, 4), m = +d.slice(5, 7), day = +d.slice(8, 10);
+            const lastDay = new Date(y, m, 0).getDate();
+            if (day === lastDay) return `stimato entro fine ${MESI[m - 1]}`;
+            if (day === 10 || day === 20) return `stimato entro il ${day} ${MESI[m - 1]} circa`;
+            return `previsto ${fmtDate(d)}`;
+        }
+
         // Etichetta breve accanto al nome (listone): infortunato / in dubbio / squalificato
         function availabilityBadgeHtml(lp) {
             const b = bsdFor(lp);
@@ -2128,7 +2139,7 @@
             if (!sq || !sq.availability || sq.availability === 'available') return '';
             const map = { injured: ['Infortunato', 'bg-red-900/70 text-red-200'], doubtful: ['In dubbio', 'bg-amber-900/70 text-amber-200'], suspended: ['Squalificato', 'bg-fuchsia-900/70 text-fuchsia-200'] };
             const [label, cls] = map[sq.availability] || [sq.availability, 'bg-slate-700 text-slate-200'];
-            return `<span class="ml-1 text-[9px] font-black px-1.5 py-0.5 rounded ${cls}" title="${escapeHtml(injuryIt(sq.injury))}${sq.return ? ' · rientro previsto ' + fmtDate(sq.return) : ''}">${label}</span>`;
+            return `<span class="ml-1 text-[9px] font-black px-1.5 py-0.5 rounded ${cls}" title="${escapeHtml(injuryIt(sq.injury))}${sq.return ? ' · rientro ' + fmtReturn(sq.return) : ''}">${label}</span>`;
         }
 
         function bsdRowsHtml(lp) {
@@ -2138,7 +2149,7 @@
             const sq = b.squad;
             if (sq && sq.availability && sq.availability !== 'available') {
                 const lbl = { injured: '🚑 <b class="text-red-300">Infortunato</b>', doubtful: '⚠️ <b class="text-amber-300">In dubbio</b>', suspended: '⛔ <b class="text-fuchsia-300">Squalificato</b>' }[sq.availability] || sq.availability;
-                rows.push(`${lbl}${sq.injury ? ` (${escapeHtml(injuryIt(sq.injury))})` : ''}${sq.return ? ` · rientro previsto <b class="text-white">${fmtDate(sq.return)}</b>` : ''}`);
+                rows.push(`${lbl}${sq.injury ? ` (${escapeHtml(injuryIt(sq.injury))})` : ''}${sq.return ? ` · rientro <b class="text-white">${fmtReturn(sq.return)}</b>` : ' · rientro non indicato'}`);
             } else if (sq) {
                 rows.push(`<span class="text-emerald-300">Disponibile</span>`);
             }
