@@ -2027,6 +2027,129 @@
                 _realIndex = null;
                 renderAll();
             } catch (e) { /* file non presente: le sezioni con dati reali restano nascoste */ }
+            try {
+                const res = await fetch('data/bsd-serie-a.json', { cache: 'no-cache' });
+                if (!res.ok) return;
+                _bsdData = await res.json();
+                _bsdIndex = null;
+                renderAll();
+            } catch (e) { /* dati BSD non presenti */ }
+        }
+
+        // --- Dati BSD (Bzzoiro): infortuni nelle rose, probabili formazioni, rigori segnati ---
+        let _bsdData = null;
+        let _bsdIndex = null;
+
+        // Cerca nella lista (stessa squadra) il giocatore del listone: cognome ed eventuale iniziale; null se assente, 'ambiguo' se più di uno
+        function findByListoneName(lp, cands, namesOf) {
+            const parts = String(lp.name).trim().split(/\s+/);
+            const initTok = parts.length > 1 && /\.$/.test(parts[parts.length - 1]) ? parts.pop() : '';
+            const surname = normName(parts.join(' '));
+            const initial = normName(initTok).replace(/[. ]/g, '');
+            let found = cands.filter(c => namesOf(c).some(n => {
+                const a = normName(n);
+                const noInit = a.replace(/^([a-z]{1,3}\. )+/, '');
+                return a === surname || noInit === surname || a.endsWith(' ' + surname) || noInit.endsWith(' ' + surname);
+            }));
+            if (found.length > 1 && initial) {
+                const f = found.filter(c => namesOf(c).some(n => normName(n).startsWith(initial)));
+                if (f.length) found = f;
+            }
+            return found.length === 1 ? found[0] : (found.length > 1 ? 'ambiguo' : null);
+        }
+
+        function buildBsdIndex() {
+            if (!_bsdData) return null;
+            const squads = {};
+            Object.entries(_bsdData.squads || {}).forEach(([team, list]) => {
+                const club = realClubName(team);
+                if (SERIE_A_CLUBS.includes(club)) squads[club] = list;
+            });
+            // Prossima partita (probabile formazione) per ogni club
+            const nextMatch = {};
+            (_bsdData.predicted || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date))).forEach(m => {
+                [['home', 'away'], ['away', 'home']].forEach(([side, other]) => {
+                    const club = realClubName(m[side]);
+                    if (!nextMatch[club]) nextMatch[club] = { m, side, opp: realClubName(m[other]) };
+                });
+            });
+            // Rigori segnati per squadra
+            const pens = {};
+            Object.values(_bsdData.penalties || {}).forEach(g => (g.items || []).forEach(it => {
+                if (it.type !== 'goal' || it.goal_type !== 'penalty') return;
+                const club = realClubName(it.is_home ? g.home : g.away);
+                (pens[club] = pens[club] || []).push(it.player);
+            }));
+            return { squads, nextMatch, pens, cache: {} };
+        }
+
+        function bsdFor(lp) {
+            if (!_bsdData) return null;
+            if (!_bsdIndex) _bsdIndex = buildBsdIndex();
+            const k = lp.id ? 'id' + lp.id : 'n' + lp.name;
+            if (_bsdIndex.cache[k]) return _bsdIndex.cache[k];
+            const idx = _bsdIndex;
+            const sq = idx.squads[lp.club] || [];
+            const me = findByListoneName(lp, sq, c => [c.name, c.short]);
+            const res = { squad: me && me !== 'ambiguo' ? me : null, ambiguous: me === 'ambiguo' };
+            const nm = idx.nextMatch[lp.club];
+            if (nm) {
+                const lu = nm.m[nm.side + '_lineup'] || {};
+                const inXi = findByListoneName(lp, lu.xi || [], c => [c.name, c.short]);
+                const inBench = inXi ? null : findByListoneName(lp, lu.bench || [], c => [c.name, c.short]);
+                res.next = { opp: nm.opp, home: nm.side === 'home', date: nm.m.date, status: nm.m.status, confidence: lu.confidence,
+                             role: inXi && inXi !== 'ambiguo' ? 'xi' : (inBench && inBench !== 'ambiguo' ? 'bench' : (inXi === 'ambiguo' || inBench === 'ambiguo' ? '?' : 'out')),
+                             score: (inXi && inXi !== 'ambiguo' ? inXi.score : (inBench && inBench !== 'ambiguo' ? inBench.score : null)) };
+            }
+            const penList = (idx.pens[lp.club] || []).map(n => ({ name: n }));
+            res.pens = penList.filter(x => findByListoneName(lp, [x], c => [c.name]) === x).length;
+            idx.cache[k] = res;
+            return res;
+        }
+
+        const INJURY_IT = [
+            [/cruciate ligament/i, 'legamento crociato'], [/hamstring/i, 'bicipite femorale'], [/thigh/i, 'coscia'], [/muscle/i, 'muscolare'],
+            [/knee/i, 'ginocchio'], [/ankle/i, 'caviglia'], [/calf/i, 'polpaccio'], [/groin/i, 'inguine'], [/shoulder/i, 'spalla'],
+            [/broken finger/i, 'frattura a un dito'], [/broken/i, 'frattura'], [/back/i, 'schiena'], [/foot/i, 'piede'], [/hip/i, 'anca'],
+            [/meniscus/i, 'menisco'], [/tendon/i, 'tendine'], [/achilles/i, 'tendine d\'Achille'], [/head|concussion/i, 'testa'],
+            [/illness|sick/i, 'malattia'], [/knock/i, 'botta'], [/physical discomfort/i, 'affaticamento'], [/strain/i, 'stiramento'],
+            [/red_card/i, 'espulsione'], [/yellow/i, 'somma di ammonizioni'], [/unknown/i, 'motivo non indicato']
+        ];
+        function injuryIt(s) {
+            const f = INJURY_IT.find(([re]) => re.test(String(s || '')));
+            return f ? f[1] : (s || '');
+        }
+        function fmtDate(d) { return d ? `${d.slice(8, 10)}/${d.slice(5, 7)}` : ''; }
+
+        // Etichetta breve accanto al nome (listone): infortunato / in dubbio / squalificato
+        function availabilityBadgeHtml(lp) {
+            const b = bsdFor(lp);
+            const sq = b && b.squad;
+            if (!sq || !sq.availability || sq.availability === 'available') return '';
+            const map = { injured: ['Infortunato', 'bg-red-900/70 text-red-200'], doubtful: ['In dubbio', 'bg-amber-900/70 text-amber-200'], suspended: ['Squalificato', 'bg-fuchsia-900/70 text-fuchsia-200'] };
+            const [label, cls] = map[sq.availability] || [sq.availability, 'bg-slate-700 text-slate-200'];
+            return `<span class="ml-1 text-[9px] font-black px-1.5 py-0.5 rounded ${cls}" title="${escapeHtml(injuryIt(sq.injury))}${sq.return ? ' · rientro previsto ' + fmtDate(sq.return) : ''}">${label}</span>`;
+        }
+
+        function bsdRowsHtml(lp) {
+            const b = bsdFor(lp);
+            if (!b) return [];
+            const rows = [];
+            const sq = b.squad;
+            if (sq && sq.availability && sq.availability !== 'available') {
+                const lbl = { injured: '🚑 <b class="text-red-300">Infortunato</b>', doubtful: '⚠️ <b class="text-amber-300">In dubbio</b>', suspended: '⛔ <b class="text-fuchsia-300">Squalificato</b>' }[sq.availability] || sq.availability;
+                rows.push(`${lbl}${sq.injury ? ` (${escapeHtml(injuryIt(sq.injury))})` : ''}${sq.return ? ` · rientro previsto <b class="text-white">${fmtDate(sq.return)}</b>` : ''}`);
+            } else if (sq) {
+                rows.push(`<span class="text-emerald-300">Disponibile</span>`);
+            }
+            if (b.next) {
+                const n = b.next;
+                const what = { xi: '<b class="text-emerald-300">probabile titolare</b>', bench: '<b class="text-amber-300">probabile panchina</b>', out: '<b class="text-red-300">non nella probabile formazione</b>', '?': 'dato non chiaro' }[n.role];
+                const conf = n.confidence ? ` · affidabilità ${Math.round(n.confidence * 100)}%` : '';
+                rows.push(`Prossima: ${n.home ? 'vs' : '@'} ${escapeHtml(n.opp)} (${fmtDate(n.date)}) → ${what}${conf}`);
+            }
+            if (b.pens) rows.push(`Rigori segnati in campionato: <b class="text-white">${b.pens}</b>`);
+            return rows;
         }
 
         function normName(s) {
@@ -2162,12 +2285,22 @@
         }
 
         function realDataHtml(lp) {
+            const bsd = bsdRowsHtml(lp);
+            const hl = highlightlyRows(lp);
+            if (hl === null && !bsd.length) return '';
+            const rounds = _realIndex ? `giornate 1-${_realIndex.maxRound}` : '';
+            const head = `<div class="text-[9px] text-slate-400 uppercase font-extrabold tracking-wider mb-1 flex items-center gap-1"><i data-lucide="activity" class="ico w-3 h-3"></i> Dati reali ${rounds ? '· ' + rounds : ''}</div>`;
+            const rows = [...bsd, ...(hl || [])];
+            return `<div class="mt-2 bg-slate-950/50 border border-slate-800 rounded-xl p-2">${head}<div class="space-y-0.5 text-[11px] text-slate-300">${rows.map(r => `<div>${r}</div>`).join('')}</div></div>`;
+        }
+
+        // Righe dai dati Highlightly (titolarità, sostituti, cambi); null se i dati non ci sono
+        function highlightlyRows(lp) {
             const st = realStatsFor(lp);
-            if (st === undefined) return '';
+            if (st === undefined) return null;
             const idx = _realIndex;
-            const head = `<div class="text-[9px] text-slate-400 uppercase font-extrabold tracking-wider mb-1 flex items-center gap-1"><i data-lucide="activity" class="ico w-3 h-3"></i> Dati reali · giornate 1-${idx.maxRound}</div>`;
-            if (!st) return `<div class="mt-2">${head}<div class="text-[11px] text-slate-500">Mai in distinta finora (o nome non trovato nei dati).</div></div>`;
-            if (st === 'ambiguo') return `<div class="mt-2">${head}<div class="text-[11px] text-slate-500">Più giocatori con questo nome nella squadra: dato non mostrato per evitare errori.</div></div>`;
+            if (!st) return ['<span class="text-slate-500">Mai in distinta finora (o nome non trovato nei dati).</span>'];
+            if (st === 'ambiguo') return ['<span class="text-slate-500">Più giocatori con questo nome nella squadra: dato non mostrato per evitare errori.</span>'];
             const tot = idx.teamMatches[st.club] || 0;
             const evTot = idx.teamEventMatches[st.club] || 0;
             const rep = replacementsFor(st);
@@ -2187,7 +2320,7 @@
                 if (st.subOn) rows.push(`Subentrato ${st.subOn} ${st.subOn === 1 ? 'volta' : 'volte'}${Object.keys(st.onFor).length ? ` (al posto di ${top(st.onFor)})` : ''}`);
                 if (evTot < tot) rows.push(`<span class="text-slate-500">Cambi disponibili per ${evTot}/${tot} partite</span>`);
             }
-            return `<div class="mt-2 bg-slate-950/50 border border-slate-800 rounded-xl p-2">${head}<div class="space-y-0.5 text-[11px] text-slate-300">${rows.map(r => `<div>${r}</div>`).join('')}</div></div>`;
+            return rows;
         }
 
         // --- Scarsità per ruolo ---
@@ -2583,7 +2716,7 @@
 
                 return `
                     <tr class="hover:bg-slate-800/50 border-b border-slate-800 transition">
-                        <td class="px-3.5 py-2 font-bold text-white">${escapeHtml(p.name)}</td>
+                        <td class="px-3.5 py-2 font-bold text-white">${escapeHtml(p.name)}${availabilityBadgeHtml(p)}</td>
                         <td class="px-3.5 py-2">${roleBadgesHtml(p)}</td>
                         <td class="px-3.5 py-2 text-slate-300">${escapeHtml(p.club)}</td>
                         <td class="px-3.5 py-2">
