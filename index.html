@@ -41,7 +41,8 @@
         .ph-card { width: 112px; height: 150px; border-radius: 14px; font-size: 32px; }
         .ph-card img { object-fit: contain; object-position: bottom center; }
 
-        .pitch { position: relative; width: 100%; aspect-ratio: 3 / 4; border-radius: 14px; overflow: hidden;
+        /* Il campo non supera mai l'altezza dello schermo (lascia spazio a titolo e schede moduli) */
+        .pitch { position: relative; width: min(100%, calc((100vh - 230px) * 0.75)); min-width: 260px; margin: 0 auto; aspect-ratio: 3 / 4; border-radius: 14px; overflow: hidden;
             background: repeating-linear-gradient(180deg, #4d7c0f 0 8.33%, #57891a 8.33% 16.66%); border: 2px solid #3f6212; }
         .pitch-line { position: absolute; border: 2px solid rgba(255,255,255,.55); }
         .pitch-slot { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; width: 22%; text-align: center; }
@@ -1836,9 +1837,10 @@
                 const cov = moduleCoverage(getTeamStats(managers[sel.value]).purchases);
                 _lineupModule = Object.keys(cov).sort((a, b) => cov[a].length - cov[b].length)[0];
             }
-            renderLineupModal();
+            // Prima si mostra la finestra, poi si disegna: così le misure del campetto sono quelle reali
             document.getElementById('lineup-modal').classList.remove('hidden');
             document.getElementById('lineup-modal').classList.add('flex');
+            renderLineupModal();
         }
         function closeLineupModal() {
             document.getElementById('lineup-modal').classList.add('hidden');
@@ -1944,7 +1946,8 @@
             const side = document.getElementById('lineup-side');
             const pitch = document.getElementById('lineup-pitch');
             if (!side || !pitch) return;
-            side.style.maxHeight = window.innerWidth >= 768 ? pitch.offsetHeight + 'px' : '';
+            const h = pitch.offsetHeight;
+            side.style.maxHeight = window.innerWidth >= 768 && h > 0 ? h + 'px' : '';
         }
         window.addEventListener('resize', syncLineupSideHeight);
 
