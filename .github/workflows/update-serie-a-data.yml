@@ -1,0 +1,44 @@
+name: Aggiorna dati Serie A
+
+# Avvio manuale (prima di ogni asta): scarica formazioni ed eventi delle partite giocate.
+# Incrementale e con tetto di richieste: se non finisce, rilanciarlo il giorno dopo.
+on:
+  workflow_dispatch:
+    inputs:
+      season:
+        description: "Anno di inizio stagione (2026 = 2026/27)"
+        default: "2026"
+      max_requests:
+        description: "Massimo richieste da usare in questa esecuzione (piano gratuito: 100/giorno)"
+        default: "85"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-serie-a-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Scarica dati
+        env:
+          HIGHLIGHTLY_KEY: ${{ secrets.HIGHLIGHTLY_KEY }}
+          SEASON: ${{ github.event.inputs.season }}
+          MAX_REQUESTS: ${{ github.event.inputs.max_requests }}
+        run: python scripts/fetch_highlightly.py
+      - name: Salva nel repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/
+          if git diff --cached --quiet; then echo "Nessun dato nuovo"; exit 0; fi
+          git commit -m "Dati Serie A aggiornati ($(date -u +%Y-%m-%d))"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
