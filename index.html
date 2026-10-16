@@ -431,6 +431,11 @@
                     <select id="fa-tier-filter" onchange="renderFreeAgents()" class="bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-semibold">
                         <option value="ALL">Tutte le Fasce</option>
                     </select>
+                    <select id="fa-sort" onchange="renderFreeAgents()" class="bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-semibold" title="Ordinamento">
+                        <option value="tier">Ordina: fasce e quotazione</option>
+                        <option value="fm">Ordina: fantamedia stimata</option>
+                        <option value="starts">Ordina: titolarità</option>
+                    </select>
                     <select id="fa-club-filter" onchange="renderFreeAgents()" class="bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-semibold">
                         <option value="ALL">Tutte le Squadre</option>
                     </select>
@@ -448,6 +453,7 @@
                                 <th class="px-3.5 py-2.5">Fascia Personalizzata</th>
                                 <th class="px-3.5 py-2.5 text-right">Quotazione (FVM)</th>
                                 <th class="px-3.5 py-2.5 text-center" title="Partite da titolare sulle partite giocate dalla sua squadra (dati reali)">Titolare</th>
+                                <th class="px-3.5 py-2.5 text-center" title="Fantamedia stimata dai dati BSD (voto BSD − 0,75 + bonus/malus): è una stima, non il voto dei giornali">FM stim.</th>
                                 <th class="px-3.5 py-2.5 text-right">Mio Valore (€)</th>
                                 <th class="px-3.5 py-2.5">Note Personali</th>
                                 <th class="px-3.5 py-2.5 text-center">Watchlist</th>
@@ -2048,6 +2054,7 @@
                 if (!res.ok) return;
                 _bsdData = await res.json();
                 _bsdIndex = null;
+                _fmIndex = null;
                 renderAll();
             } catch (e) { /* dati BSD non presenti */ }
         }
@@ -2055,6 +2062,17 @@
         // --- Dati BSD (Bzzoiro): infortuni nelle rose, probabili formazioni, rigori segnati ---
         let _bsdData = null;
         let _bsdIndex = null;
+
+        // L'iniziale del listone ("L." in "Martinez L.", "F.P." in "Esposito F.P.") è compatibile con il nome dei dati?
+        // Sì se nei dati c'è solo il cognome (es. "Vitinha"), o se una delle iniziali coincide con un nome di battesimo.
+        function initialMatches(apiName, surname, initial) {
+            const tokens = normName(apiName).split(' ').filter(Boolean);
+            const surTokens = surname.split(' ');
+            const first = tokens.slice(0, Math.max(0, tokens.length - surTokens.length));
+            if (!first.length) return true;
+            const letters = new Set(initial.replace(/[^a-z]/g, '').split(''));
+            return first.some(t => letters.has(t.charAt(0)));
+        }
 
         // Cerca nella lista (stessa squadra) il giocatore del listone: cognome ed eventuale iniziale; null se assente, 'ambiguo' se più di uno
         function findByListoneName(lp, cands, namesOf) {
@@ -2067,10 +2085,9 @@
                 const noInit = a.replace(/^([a-z]{1,3}\. )+/, '');
                 return a === surname || noInit === surname || a.endsWith(' ' + surname) || noInit.endsWith(' ' + surname);
             }));
-            if (found.length > 1 && initial) {
-                const f = found.filter(c => namesOf(c).some(n => normName(n).startsWith(initial)));
-                if (f.length) found = f;
-            }
+            // Se il listone indica l'iniziale del nome (es. "Martinez L."), deve sempre combaciare:
+            // altrimenti "Martinez L." verrebbe abbinato a Josep Martínez quando è l'unico Martínez presente
+            if (initial) found = found.filter(c => namesOf(c).some(n => initialMatches(n, surname, initial)));
             return found.length === 1 ? found[0] : (found.length > 1 ? 'ambiguo' : null);
         }
 
@@ -2181,6 +2198,10 @@
                 rows.push(`Prossima: ${n.home ? 'vs' : '@'} ${escapeHtml(n.opp)} (${fmtDate(n.date)}) → ${what}${conf}`);
             }
             if (b.pens) rows.push(`Rigori segnati in campionato: <b class="text-white">${b.pens}</b>`);
+            const f = fmFor(lp);
+            if (f) rows.push(`Fantamedia stimata <b class="text-white">${f.fm.toFixed(2)}</b> (voto medio stimato ${f.mv.toFixed(2)}) su ${f.pres} ${f.pres === 1 ? 'partita' : 'partite'}${f.g ? ` · ${f.g} gol` : ''}${f.a ? ` · ${f.a} assist` : ''}${f.yc ? ` · ${f.yc} amm.` : ''}${f.rc ? ` · ${f.rc} esp.` : ''}${f.gc && f.isGk ? ` · ${f.gc} gol subiti` : ''}${f.ps ? ` · ${f.ps} rigori parati` : ''}`);
+            const cal = nextFixturesHtml(lp.club, 5);
+            if (cal) rows.push(`Prossime: ${cal}`);
             return rows;
         }
 
@@ -2267,10 +2288,7 @@
                     const noInit = a.replace(/^[a-z]{1,3}\. /, '');
                     return a === surname || noInit === surname || a.endsWith(' ' + surname) || noInit.endsWith(' ' + surname);
                 });
-                if (cands.length > 1 && initial) {
-                    const f = cands.filter(st => normName(st.name).startsWith(initial));
-                    if (f.length) cands = f;
-                }
+                if (initial) cands = cands.filter(st => initialMatches(st.name, surname, initial));
                 listMap[k] = cands.length === 1 ? cands[0] : (cands.length > 1 ? 'ambiguo' : null);
             });
 
@@ -2594,7 +2612,7 @@
                 const home = m[0] === club;
                 return `<div class="flex items-center justify-between bg-slate-950/60 border border-slate-800 rounded-lg px-2 py-1 text-[11px]">
                     <span class="text-slate-400">${r.round}ª · ${r.date.slice(8, 10)}/${r.date.slice(5, 7)}</span>
-                    <span class="font-bold text-white">${home ? 'vs' : '@'} ${escapeHtml(home ? m[1] : m[0])}</span>
+                    <span class="font-bold text-white flex items-center gap-1.5">${home ? 'vs' : '@'} ${clubLogoHtml(home ? m[1] : m[0], 18)} ${escapeHtml(home ? m[1] : m[0])} ${rankBadgeHtml(home ? m[1] : m[0])}</span>
                     <span class="text-[9px] font-black px-1.5 rounded ${home ? 'bg-emerald-900/60 text-emerald-200' : 'bg-slate-700 text-slate-200'}">${home ? 'CASA' : 'FUORI'}</span></div>`;
             }).join('');
             // Giocatori del listone di questa squadra già acquistati
@@ -2608,6 +2626,88 @@
                     <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl"><div class="text-xs font-bold text-white mb-2 flex items-center gap-1.5"><i data-lucide="calendar-range" class="ico w-4 h-4 text-amber-300"></i> Prossime partite</div><div class="space-y-1">${nextRounds}</div></div>
                     <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl"><div class="text-xs font-bold text-white mb-2 flex items-center gap-1.5"><i data-lucide="gavel" class="ico w-4 h-4 text-indigo-300"></i> Già presi all'asta</div><div class="space-y-1">${takenHtml}</div></div>
                 </div>`;
+        }
+
+        // --- Fantamedia stimata (statistiche BSD per partita) ---
+        // Voto stimato = voto BSD − 0,75 (arrotondato a 0,5); bonus: gol +3, assist +1, amm. −0,5, esp. −1,
+        // rigore sbagliato −3, rigore parato +3, gol subito −1 (solo portieri). Solo partite con voto.
+        let _fmIndex = null;
+        function buildFmIndex() {
+            if (!_bsdData || !_bsdData.player_stats) return null;
+            if (!_bsdIndex) _bsdIndex = buildBsdIndex();
+            const nameToClubs = {};
+            Object.entries(_bsdIndex.squads).forEach(([club, list]) => list.forEach(p => {
+                [p.name, p.short].filter(Boolean).forEach(n => { const k = normName(n); (nameToClubs[k] = nameToClubs[k] || new Set()).add(club); });
+            }));
+            const byClub = {};
+            Object.values(_bsdData.player_stats).forEach(ev => {
+                const clubs = [realClubName(ev.home), realClubName(ev.away)];
+                (ev.players || []).forEach(r => {
+                    if (r.rating == null || !(r.min > 0)) return;
+                    const cands = [...(nameToClubs[normName(r.name)] || []), ...(nameToClubs[normName(r.short)] || [])];
+                    const club = clubs.find(c => cands.includes(c));
+                    if (!club) return;
+                    const list = (byClub[club] = byClub[club] || {});
+                    const k = normName(r.name);
+                    const e = list[k] || (list[k] = { name: r.name, short: r.short, pres: 0, mvSum: 0, fmSum: 0, g: 0, a: 0, yc: 0, rc: 0, gc: 0, ps: 0, pm: 0, isGk: r.pos === 'G' });
+                    const voto = Math.max(3, Math.min(10, Math.round((r.rating - 0.75) * 2) / 2));
+                    const isGk = r.pos === 'G';
+                    const bonus = 3 * (r.g || 0) + (r.a || 0) - 0.5 * (r.yc || 0) - (r.rc || 0) - 3 * (r.pm || 0) + 3 * (r.ps || 0) - (isGk ? (r.gc || 0) : 0);
+                    e.pres++; e.mvSum += voto; e.fmSum += voto + bonus;
+                    e.g += r.g || 0; e.a += r.a || 0; e.yc += r.yc || 0; e.rc += r.rc || 0; e.ps += r.ps || 0; e.pm += r.pm || 0;
+                    if (isGk) e.gc += r.gc || 0;
+                });
+            });
+            Object.values(byClub).forEach(list => Object.values(list).forEach(e => { e.mv = e.mvSum / e.pres; e.fm = e.fmSum / e.pres; }));
+            return { byClub, cache: {} };
+        }
+        function fmFor(lp) {
+            if (!_bsdData || !_bsdData.player_stats) return null;
+            if (!_fmIndex) _fmIndex = buildFmIndex();
+            if (!_fmIndex) return null;
+            const k = lp.id ? 'id' + lp.id : 'n' + lp.name;
+            if (k in _fmIndex.cache) return _fmIndex.cache[k];
+            const cands = Object.values(_fmIndex.byClub[lp.club] || {});
+            const f = findByListoneName(lp, cands, c => [c.name, c.short]);
+            return (_fmIndex.cache[k] = f && f !== 'ambiguo' ? f : null);
+        }
+        function fmBadgeHtml(lp) {
+            const f = fmFor(lp);
+            if (!f) return '<span class="text-slate-600">-</span>';
+            const cls = f.fm >= 7 ? 'text-emerald-300' : f.fm >= 6.25 ? 'text-amber-200' : 'text-slate-400';
+            const few = f.pres < 3;
+            return `<span class="font-mono font-bold ${few ? 'text-slate-500' : cls}" title="Voto medio stimato ${f.mv.toFixed(2)} · ${f.pres} ${f.pres === 1 ? 'partita' : 'partite'}${few ? ' (campione troppo piccolo)' : ''}">${f.fm.toFixed(2)}</span><span class="text-[9px] text-slate-500 ml-0.5">${f.pres}p</span>`;
+        }
+
+        // --- Difficoltà calendario: posizione in classifica degli avversari (BSD) ---
+        function clubRank(club) {
+            const rows = (_bsdData && _bsdData.standings) || [];
+            const r = rows.find(x => realClubName(x.team) === club);
+            return r ? r.pos : null;
+        }
+        function rankClass(pos) {
+            if (!pos) return 'bg-slate-700 text-slate-200';
+            if (pos <= 4) return 'bg-red-900/80 text-red-100';
+            if (pos <= 8) return 'bg-orange-900/80 text-orange-100';
+            if (pos <= 12) return 'bg-yellow-900/70 text-yellow-100';
+            if (pos <= 16) return 'bg-lime-900/70 text-lime-100';
+            return 'bg-emerald-900/80 text-emerald-100';
+        }
+        function rankBadgeHtml(club) {
+            const pos = clubRank(club);
+            return pos ? `<span class="text-[9px] font-black px-1 rounded ${rankClass(pos)}" title="${club}: ${pos}ª in classifica">${pos}ª</span>` : '';
+        }
+        // Prossime n partite del club come etichette colorate per difficoltà (rosso = avversario forte)
+        function nextFixturesHtml(club, n) {
+            const today = new Date().toISOString().slice(0, 10);
+            const chips = SERIE_A_ROUNDS.filter(r => r.date >= today).slice(0, n).map(r => {
+                const m = r.matches.find(x => x.includes(club));
+                if (!m) return '';
+                const home = m[0] === club, opp = home ? m[1] : m[0];
+                const pos = clubRank(opp);
+                return `<span class="inline-block text-[9px] font-black px-1 py-0.5 rounded ${rankClass(pos)}" title="${r.round}ª giornata: ${home ? 'in casa' : 'in trasferta'} contro ${opp}${pos ? ' (' + pos + 'ª)' : ''}">${home ? '' : '@'}${opp.slice(0, 3).toUpperCase()}</span>`;
+            }).filter(Boolean);
+            return chips.length ? `<span class="inline-flex gap-0.5 flex-wrap align-middle">${chips.join('')}</span>` : '';
         }
 
         // Annulla l'ultimo acquisto registrato nella fase corrente
@@ -2907,7 +3007,15 @@
             if (clubFilter !== 'ALL') available = available.filter(p => p.club === clubFilter);
             if (searchVal) available = available.filter(p => p.name.toLowerCase().includes(searchVal));
 
-            available.sort((a, b) => {
+            const sortMode = (document.getElementById('fa-sort') || {}).value || 'tier';
+            if (sortMode === 'fm') {
+                // Chi ha meno di 3 presenze va in fondo: una sola partita con gol non deve finire in cima
+                const fmv = p => { const f = fmFor(p); return f ? (f.pres >= 3 ? f.fm : f.fm - 100) : -1000; };
+                available.sort((a, b) => fmv(b) - fmv(a));
+            } else if (sortMode === 'starts') {
+                const sv = p => { const st = realStatsFor(p); if (!st || st === 'ambiguo') return -1; const t = _realIndex.teamMatches[st.club] || 0; return t ? st.starts / t : -1; };
+                available.sort((a, b) => sv(b) - sv(a) || lineupValue(b) - lineupValue(a));
+            } else available.sort((a, b) => {
                 let tierA = playerTiersMap[a.name];
                 let tierB = playerTiersMap[b.name];
 
@@ -2928,7 +3036,7 @@
 
             document.getElementById('fa-counter-info').innerText = `Mostrando ${available.length} giocatori svincolati.`;
             if (available.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="9" class="text-center py-5 text-slate-500 italic">Nessun giocatore trovato.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="10" class="text-center py-5 text-slate-500 italic">Nessun giocatore trovato.</td></tr>`;
                 return;
             }
 
@@ -2962,6 +3070,7 @@
                         </td>
                         <td class="px-3.5 py-2 text-right font-mono text-indigo-300 font-bold">${displayFvm(p) || '-'}</td>
                         <td class="px-3.5 py-2 text-center">${starterBadgeHtml(p)}</td>
+                        <td class="px-3.5 py-2 text-center">${fmBadgeHtml(p)}</td>
                         <td class="px-3.5 py-2 text-right">
                             <input type="number" min="0" value="${customVal}" onchange="updateCustomValue('${p.name.replace(/'/g, "\\'")}', this.value)" placeholder="-"
                                 class="w-16 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-right text-emerald-400 font-mono font-bold text-xs focus:outline-none focus:border-indigo-500">
