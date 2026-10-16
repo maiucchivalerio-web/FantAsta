@@ -14,6 +14,7 @@ import urllib.request
 BASE = "https://soccer.highlightly.net"
 KEY = os.environ.get("HIGHLIGHTLY_KEY", "")
 SEASON = os.environ.get("SEASON", "2026")
+MATCH_DATE = os.environ.get("MATCH_DATE", "")  # es. 2026-10-11: giorno con partite già giocate
 DOCS = [
     "https://highlightly.net/football-api/documentation/",
     "https://highlightly.net/football-api/",
@@ -46,7 +47,7 @@ def fetch(url, headers=None):
         return None, str(e)
 
 
-def api(path, params=None):
+def api(path, params=None, limit=1500):
     query = "?" + urllib.parse.urlencode(params) if params else ""
     status, body = fetch(BASE + path + query, {"x-rapidapi-key": KEY})
     try:
@@ -55,7 +56,7 @@ def api(path, params=None):
         data = None
     log(f"### GET {path}{query} → HTTP {status}")
     log("```")
-    log(body[:1500])
+    log(body[:limit])
     log("```")
     return status, data
 
@@ -98,7 +99,10 @@ for lg in items(leagues):
 log(f"- Serie A id: {league_id}")
 
 if league_id:
-    _, matches = api("/matches", {"leagueId": league_id, "season": SEASON, "limit": 20})
+    params = {"leagueId": league_id, "season": SEASON, "limit": 20}
+    if MATCH_DATE:
+        params["date"] = MATCH_DATE
+    _, matches = api("/matches", params, limit=800)
     all_m = items(matches)
     finished = [m for m in all_m if "finish" in json.dumps(m.get("state", m.get("status", ""))).lower()]
     log(f"- Partite restituite: {len(all_m)}, terminate: {len(finished)}")
@@ -106,9 +110,9 @@ if league_id:
     if pick:
         mid = pick.get("id")
         log(f"- Partita di prova id={mid}")
-        api(f"/lineups/{mid}")
-        api(f"/statistics/{mid}")
-        api(f"/events/{mid}")
+        api(f"/lineups/{mid}", limit=3500)
+        api(f"/events/{mid}", limit=3500)
+        api(f"/statistics/{mid}", limit=800)
 
 log("")
 log("Fine prova: leggere le risposte sopra per capire cosa include il piano.")

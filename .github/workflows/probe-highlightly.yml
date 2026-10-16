@@ -7,6 +7,9 @@ on:
       season:
         description: "Anno di inizio stagione (2026 = 2026/27)"
         default: "2026"
+      match_date:
+        description: "Giorno con partite già giocate (AAAA-MM-GG), facoltativo"
+        default: ""
 
 permissions:
   contents: read
@@ -23,4 +26,5 @@ jobs:
         env:
           HIGHLIGHTLY_KEY: ${{ secrets.HIGHLIGHTLY_KEY }}
           SEASON: ${{ github.event.inputs.season }}
+          MATCH_DATE: ${{ github.event.inputs.match_date }}
         run: python scripts/probe_highlightly.py
