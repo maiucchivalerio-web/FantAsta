@@ -82,18 +82,39 @@ if not KEY:
     log("ERRORE: segreto BSD_KEY mancante.")
     raise SystemExit(1)
 
-_, leagues = api("/api/leagues/", limit=1500)
-serie_a = None
-for lg in items(leagues):
-    name = str(lg.get("name", "")).lower()
-    country = json.dumps(lg.get("country", "")).lower()
-    if "serie a" in name and ("ital" in country or "ital" in name or not country.strip('"')):
-        serie_a = lg.get("id")
+# Schema OpenAPI: parametri e campi esatti degli endpoint che ci interessano
+st, schema_txt = fetch(BASE + "/api/schema/?format=json")
+log(f"### Schema → HTTP {st}")
+try:
+    schema = json.loads(schema_txt)
+except ValueError:
+    schema = None
+    log(schema_txt[:500])
+if schema:
+    for path, ops in sorted(schema.get("paths", {}).items()):
+        get = ops.get("get") or {}
+        params = [p.get("name") for p in get.get("parameters", [])]
+        log(f"- {path}: parametri {params}")
+    comps = schema.get("components", {}).get("schemas", {})
+    for name, sch in comps.items():
+        props = list((sch.get("properties") or {}).keys())
+        if any(w in " ".join(props).lower() for w in ("unavailable", "injur", "lineup", "penalt", "missing")) or name.lower().startswith(("event", "match", "player")):
+            log(f"- schema {name}: {props}")
+
+# Elenco campionati (paginato) per trovare la Serie A
+serie_a, page = None, 1
+while not serie_a and page <= 6:
+    _, leagues = api("/api/leagues/", {"page": page}, limit=300)
+    for lg in items(leagues):
+        if str(lg.get("name", "")).strip().lower() == "serie a" and "ital" in str(lg.get("country", "")).lower():
+            serie_a = lg.get("id")
+    if not (leagues or {}).get("next"):
         break
+    page += 1
 log(f"- Serie A id: {serie_a}")
 
 if serie_a:
-    for params in ({"league": serie_a, "status": "finished"}, {"league": serie_a}):
+    for params in ({"league": serie_a, "status": "finished"}, {"league": serie_a}, {"league_id": serie_a}):
         st, ev = api("/api/events/", params, limit=4000)
         evs = items(ev)
         if evs:
@@ -103,7 +124,8 @@ if serie_a:
             first = evs[0]
             log(f"- Campi di una partita: {sorted(first.keys()) if isinstance(first, dict) else type(first)}")
             if isinstance(first, dict) and first.get("id"):
-                api(f"/api/events/{first['id']}/", limit=4000)
+                api(f"/api/events/{first['id']}/", limit=6000)
+                api(f"/api/v2/matches/{first['id']}/", limit=6000)
             break
 
 log("")
