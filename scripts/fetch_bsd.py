@@ -56,6 +56,15 @@ def main():
 
     # 1) Rose con disponibilità (infortuni) per ogni squadra di Serie A
     teams = paged("/api/v2/teams/", {"league_id": LEAGUE_ID})
+    if teams:
+        print(f"Campi squadra: {sorted(teams[0].keys())}")
+    logos = {}
+    for t in teams:
+        for k, v in t.items():
+            if isinstance(v, str) and any(w in k.lower() for w in ("logo", "crest", "image", "badge")) and v.startswith("http"):
+                logos[t.get("name")] = v
+                break
+    print(f"Stemmi trovati: {len(logos)}")
     squads = {}
     for t in teams:
         sq = api(f"/api/v2/teams/{t['id']}/squad/") or {}
@@ -71,22 +80,48 @@ def main():
 
     # 2) Probabili formazioni delle partite dei prossimi 7 giorni
     upcoming = paged("/api/v2/events/", {"league_id": LEAGUE_ID, "date_from": today.isoformat(),
-                                          "date_to": (today + timedelta(days=7)).isoformat()})
-    predicted = []
+                                          "date_to": (today + timedelta(days=14)).isoformat()})
+    upcoming = [ev for ev in upcoming if ev.get("status") in ("notstarted", "scheduled", None)]
+    upcoming.sort(key=lambda ev: ev.get("event_date") or "")
+    # Solo la prima partita futura di ogni squadra
+    seen_teams, todo = set(), []
     for ev in upcoming:
-        if ev.get("status") not in ("notstarted", "scheduled", None):
-            continue
+        teams_ev = {ev.get("home_team"), ev.get("away_team")}
+        if teams_ev - seen_teams:
+            todo.append(ev)
+            seen_teams |= teams_ev
+    recent = paged("/api/v2/events/", {"league_id": LEAGUE_ID, "date_from": (today - timedelta(days=10)).isoformat(),
+                                        "date_to": today.isoformat(), "status": "finished"})
+    recent.sort(key=lambda ev: ev.get("event_date") or "", reverse=True)
+    predicted = []
+
+    def add_lineup(ev, kind):
         lu = api(f"/api/v2/events/{ev['id']}/lineups/") or {}
         sides = lu.get("lineups") or {}
         entry = {"id": ev["id"], "date": ev.get("event_date"), "round": ev.get("round_number"),
-                 "home": ev.get("home_team"), "away": ev.get("away_team"),
+                 "home": ev.get("home_team"), "away": ev.get("away_team"), "kind": kind,
                  "status": lu.get("lineup_status"), "unavailable": lu.get("unavailable_players")}
         for side in ("home", "away"):
             s = sides.get(side) or {}
             entry[side + "_lineup"] = {"formation": s.get("formation"), "confidence": s.get("confidence"),
                                        "xi": slim_players(s.get("players")), "bench": slim_players(s.get("substitutes"))}
         predicted.append(entry)
-    print(f"Probabili formazioni: {len(predicted)} partite")
+        return entry
+
+    covered = set()
+    for ev in todo:
+        e = add_lineup(ev, "next")
+        for side in ("home", "away"):
+            if e[side + "_lineup"]["xi"]:
+                covered.add(e[side])
+    # Squadre senza probabile formazione: ultima formazione realmente schierata
+    for ev in recent:
+        if {ev.get("home_team"), ev.get("away_team")} - covered:
+            e = add_lineup(ev, "last")
+            for side in ("home", "away"):
+                if e[side + "_lineup"]["xi"]:
+                    covered.add(e[side])
+    print(f"Formazioni: {sum(1 for p in predicted if p['kind'] == 'next')} prossime, {sum(1 for p in predicted if p['kind'] == 'last')} ultime giocate · squadre coperte: {len(covered)}")
 
     # 3) Rigori dalle partite giocate (incidenti), incrementale
     pens = old.get("penalties", {})
@@ -115,7 +150,7 @@ def main():
     os.makedirs("data", exist_ok=True)
     with open(PATH, "w", encoding="utf-8") as f:
         json.dump({"updated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                   "squads": squads, "predicted": predicted, "penalties": pens},
+                   "squads": squads, "predicted": predicted, "penalties": pens, "logos": logos},
                   f, ensure_ascii=False, separators=(",", ":"))
     injured = sum(1 for s in squads.values() for p in s if (p.get("availability") or "").lower() not in ("", "available", "none"))
     print(f"Giocatori non disponibili nelle rose: {injured}")
