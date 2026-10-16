@@ -11,6 +11,9 @@ on:
       max_requests:
         description: "Massimo richieste da usare in questa esecuzione (piano gratuito: 100/giorno)"
         default: "85"
+      skip_highlightly:
+        description: "Salta Highlightly (solo BSD) — utile se le 100 richieste giornaliere sono finite"
+        default: "false"
 
 permissions:
   contents: write
@@ -28,11 +31,17 @@ jobs:
         with:
           python-version: "3.12"
       - name: Scarica dati
+        if: ${{ github.event.inputs.skip_highlightly != 'true' }}
         env:
           HIGHLIGHTLY_KEY: ${{ secrets.HIGHLIGHTLY_KEY }}
           SEASON: ${{ github.event.inputs.season }}
           MAX_REQUESTS: ${{ github.event.inputs.max_requests }}
         run: python scripts/fetch_highlightly.py
+      - name: Scarica infortuni, probabili formazioni e rigori (BSD)
+        continue-on-error: true
+        env:
+          BSD_KEY: ${{ secrets.BSD_KEY }}
+        run: python scripts/fetch_bsd.py
       - name: Salva nel repository
         run: |
           git config user.name "github-actions[bot]"
