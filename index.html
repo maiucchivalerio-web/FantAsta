@@ -346,6 +346,15 @@
                 <div id="teams-overview-grid" class="flex flex-row gap-2 w-full pt-4 pb-2 overflow-x-auto overflow-y-visible"></div>
             </div>
 
+            <!-- Scarsità per ruolo: titolari ancora liberi -->
+            <div id="scarcity-panel" class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-2">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <h2 class="text-sm font-bold text-white flex items-center gap-2"><i data-lucide="gauge" class="ico w-4 h-4 text-rose-300"></i> Scarsità per ruolo</h2>
+                    <span id="scarcity-legend" class="text-[10px] text-slate-400"></span>
+                </div>
+                <div id="scarcity-chips" class="grid grid-cols-3 sm:grid-cols-6 lg:grid-cols-12 gap-1.5"></div>
+            </div>
+
             <!-- Moduli Mantra coperti da ogni rosa (solo in modalità Mantra) -->
             <div id="mantra-modules-panel" class="hidden bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
                 <!-- Banner cliccabile: apre/chiude la tabella -->
@@ -2181,6 +2190,57 @@
             return `<div class="mt-2 bg-slate-950/50 border border-slate-800 rounded-xl p-2">${head}<div class="space-y-0.5 text-[11px] text-slate-300">${rows.map(r => `<div>${r}</div>`).join('')}</div></div>`;
         }
 
+        // --- Scarsità per ruolo ---
+        // "Titolare" = partito dall'inizio in almeno metà delle partite della sua squadra (dati reali).
+        // Senza dati reali si usa la quotazione (Qt >= 10) come ripiego.
+        function isLikelyStarter(p) {
+            const st = realStatsFor(p);
+            if (st && st !== 'ambiguo') {
+                const tot = _realIndex.teamMatches[st.club] || 0;
+                return tot > 0 && st.starts / tot >= 0.5;
+            }
+            if (st === undefined) return lineupValue(p) >= 10;
+            return false;
+        }
+
+        function renderScarcity() {
+            const panel = document.getElementById('scarcity-panel');
+            const listone = getListone();
+            if (!listone.length) { panel.classList.add('hidden'); return; }
+            panel.classList.remove('hidden');
+            const mantra = isMantra();
+            const roles = mantra ? MANTRA_ROLES : ['POR', 'DIF', 'CEN', 'ATT'];
+            const free = getAvailableListone();
+            const usingReal = !!_realData;
+            document.getElementById('scarcity-legend').innerText = usingReal
+                ? 'Titolari liberi (in campo dall\'inizio in almeno metà delle partite) · passa sopra per i migliori · clicca per il listone'
+                : 'Liberi con quotazione ≥ 10 · clicca per il listone';
+            document.getElementById('scarcity-chips').innerHTML = roles.map(r => {
+                const roleKey = mantra ? 'MR_' + r : r;
+                const pool = free.filter(p => matchesRoleFilter(p, roleKey));
+                const good = pool.filter(isLikelyStarter).sort((a, b) => lineupValue(b) - lineupValue(a));
+                const n = good.length;
+                const cls = n <= 2 ? 'border-red-500/60 bg-red-950/40 text-red-200'
+                          : n <= 5 ? 'border-amber-500/50 bg-amber-950/30 text-amber-200'
+                          : 'border-slate-700 bg-slate-950/50 text-slate-200';
+                const tip = good.slice(0, 6).map(p => `${p.name} (${p.club}, Qt ${lineupValue(p)})`).join('\n') || 'Nessuno';
+                const label = mantra ? `<span class="mr-chip mr-${r}">${r}</span>` : `<span class="role-${r.toLowerCase()} px-1.5 rounded text-[10px] font-bold">${r}</span>`;
+                return `<button onclick="openListoneRole('${roleKey}')" title="${escapeHtml(tip)}" class="rounded-xl border px-2 py-1.5 text-left hover:brightness-125 transition ${cls}">
+                    <div class="flex items-center justify-between">${label}${n <= 2 ? '<i data-lucide="triangle-alert" class="w-3.5 h-3.5 text-red-300"></i>' : ''}</div>
+                    <div class="font-mono font-black text-lg leading-tight">${n}</div>
+                    <div class="text-[9px] text-slate-400">su ${pool.length} liberi</div>
+                </button>`;
+            }).join('');
+        }
+
+        function openListoneRole(roleKey) {
+            switchTab('free-agents');
+            populateRoleFilter();
+            const sel = document.getElementById('fa-role-filter');
+            if ([...sel.options].some(o => o.value === roleKey)) sel.value = roleKey;
+            renderFreeAgents();
+        }
+
         // Annulla l'ultimo acquisto registrato nella fase corrente
         function undoLastPurchase() {
             const fase = getFaseObj();
@@ -3117,6 +3177,7 @@
             renderOwnerSelect();
             renderSelectedRoleField();
             renderTeamsOverview();
+            renderScarcity();
             renderMantraModules();
             if (!document.getElementById('lineup-modal').classList.contains('hidden')) renderLineupModal();
             renderLiveHistory();
