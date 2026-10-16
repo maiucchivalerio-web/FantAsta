@@ -17,6 +17,20 @@
         .role-dif { background-color: #d1fae5; color: #065f46; }
         .role-cen { background-color: #dbeafe; color: #1e40af; }
         .role-att { background-color: #fee2e2; color: #991b1b; }
+        /* Ruoli Mantra: tonalità per reparto (giallo portieri, verdi difesa, blu centrocampo, viola trequarti/ali, rossi attacco) */
+        .mr-chip { display: inline-block; padding: 0 5px; border-radius: 4px; font-weight: 800; font-size: 9px; line-height: 15px; }
+        .mr-Por { background-color: #fef3c7; color: #92400e; }
+        .mr-Dc { background-color: #bbf7d0; color: #14532d; }
+        .mr-Dd, .mr-Ds { background-color: #d1fae5; color: #065f46; }
+        .mr-B { background-color: #ccfbf1; color: #115e59; }
+        .mr-E { background-color: #e0f2fe; color: #075985; }
+        .mr-M { background-color: #dbeafe; color: #1e40af; }
+        .mr-C { background-color: #c7d2fe; color: #3730a3; }
+        .mr-W { background-color: #f3e8ff; color: #6b21a8; }
+        .mr-T { background-color: #fae8ff; color: #86198f; }
+        .mr-A { background-color: #ffe4e6; color: #9f1239; }
+        .mr-Pc { background-color: #fecaca; color: #7f1d1d; }
+        .mr-zero { opacity: .35; }
         .star-container { display: inline-flex; gap: 2px; }
         .star-rating { cursor: pointer; color: #475569; transition: all 0.15s ease; font-size: 1.1rem; }
         .star-rating:hover { transform: scale(1.3); color: #fbbf24; }
@@ -262,6 +276,7 @@
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-2.5">
                                 <div>
                                     <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Ruolo</label>
+                                    <div id="input-mantra-roles" class="hidden w-full bg-slate-800/60 border border-slate-700 rounded-xl px-2.5 py-1.5 min-h-[30px] flex items-center gap-1 flex-wrap"></div>
                                     <select id="input-role" disabled class="w-full bg-slate-800/60 border border-slate-700 rounded-xl px-2.5 py-1.5 text-slate-300 text-xs font-semibold">
                                         <option value="POR">Portiere (POR)</option>
                                         <option value="DIF">Difensore (DIF)</option>
@@ -505,6 +520,22 @@
             </div>
 
             <div class="border-t border-slate-800 pt-2.5 space-y-2">
+                <label class="block text-xs font-bold text-indigo-400 uppercase tracking-wider">Modalità di Gioco</label>
+                <select id="cfg-mode" onchange="toggleConfigModeFields()" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-white text-xs font-semibold">
+                    <option value="classic">Classic (P / D / C / A con slot per ruolo)</option>
+                    <option value="mantra">Mantra (ruoli Mantra, rosa libera)</option>
+                </select>
+            </div>
+
+            <div id="cfg-mantra-fields" class="border-t border-slate-800 pt-2.5 space-y-2 hidden">
+                <label class="block text-xs font-bold text-indigo-400 uppercase tracking-wider">Rosa Mantra</label>
+                <div>
+                    <label class="block text-[11px] text-slate-300 mb-1">Giocatori totali per rosa (nessun vincolo per ruolo)</label>
+                    <input type="number" id="cfg-roster-size" min="1" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1 text-white font-mono text-xs">
+                </div>
+            </div>
+
+            <div id="cfg-classic-fields" class="border-t border-slate-800 pt-2.5 space-y-2">
                 <label class="block text-xs font-bold text-indigo-400 uppercase tracking-wider">Slot per Ruolo (per ogni rosa)</label>
                 <div class="grid grid-cols-2 gap-2.5">
                     <div>
@@ -544,6 +575,13 @@
             <div>
                 <label class="block text-xs text-slate-300 mb-1 font-semibold">Password / Chiave d'accesso (Opzionale)</label>
                 <input type="text" id="new-slot-psw-input" placeholder="Password lega..." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-white text-xs">
+            </div>
+            <div>
+                <label class="block text-xs text-slate-300 mb-1 font-semibold">Modalità</label>
+                <select id="new-slot-mode-input" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-white text-xs font-semibold">
+                    <option value="classic">Classic</option>
+                    <option value="mantra">Mantra</option>
+                </select>
             </div>
             <div class="flex justify-end gap-2 pt-2">
                 <button onclick="closeNewSlotModal()" class="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 rounded-xl text-slate-300">Annulla</button>
@@ -626,6 +664,107 @@
         function getListone() { return getFaseObj().listone; }
         function getConfig() { return getLega().config; }
 
+        // --- Modalità Classic / Mantra ---
+        const MANTRA_ROLES = ['Por', 'Dc', 'Dd', 'Ds', 'B', 'E', 'M', 'C', 'W', 'T', 'A', 'Pc'];
+        const MANTRA_ROLE_NAMES = {
+            Por: 'Portiere', Dc: 'Difensore centrale', Dd: 'Terzino destro', Ds: 'Terzino sinistro', B: 'Braccetto',
+            E: 'Esterno', M: 'Mediano', C: 'Centrocampista', W: 'Ala', T: 'Trequartista', A: 'Attaccante', Pc: 'Punta centrale'
+        };
+        const DEFAULT_MANTRA_ROSTER_SIZE = 30;
+
+        function isMantra() { return getConfig().mode === 'mantra'; }
+
+        // Numero totale di giocatori in rosa: in Mantra è un numero unico (nessun vincolo per ruolo), in Classic la somma degli slot
+        function getTotalSlots() {
+            const config = getConfig();
+            if (isMantra()) return config.rosterSize || DEFAULT_MANTRA_ROSTER_SIZE;
+            return (config.slots.POR || 0) + (config.slots.DIF || 0) + (config.slots.CEN || 0) + (config.slots.ATT || 0);
+        }
+
+        // "Dd;E" / "Dd/E" / "Dd, E" -> ['Dd','E'], solo token Mantra validi (confronto esatto, non "contiene")
+        function parseMantraRoles(raw) {
+            return String(raw || '').split(/[;,\/\s]+/).map(t => t.trim()).filter(Boolean)
+                .map(t => MANTRA_ROLES.find(r => r.toLowerCase() === t.toLowerCase()))
+                .filter(Boolean);
+        }
+
+        // Ruolo Classic dalla colonna "R" (P/D/C/A): primo carattere, confronto esatto
+        function parseClassicRole(raw) {
+            const first = String(raw || '').trim().toUpperCase().charAt(0);
+            return { P: 'POR', D: 'DIF', C: 'CEN', A: 'ATT' }[first] || '';
+        }
+
+        // Ricava il reparto Classic dai ruoli Mantra (serve solo se il file non ha la colonna "R")
+        function classicRoleFromMantra(mantraRoles) {
+            const r = mantraRoles[0];
+            if (!r) return '';
+            if (r === 'Por') return 'POR';
+            if (['Dc', 'Dd', 'Ds', 'B'].includes(r)) return 'DIF';
+            if (['E', 'M', 'C'].includes(r)) return 'CEN';
+            if (['W', 'T'].includes(r)) return mantraRoles.includes('A') || mantraRoles.includes('Pc') ? 'ATT' : 'CEN';
+            return 'ATT';
+        }
+
+        function escapeHtml(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        // Badge ruolo: in Mantra tutti i ruoli del giocatore, in Classic il ruolo P/D/C/A
+        function roleBadgesHtml(p, size) {
+            if (isMantra() && p.mantraRoles && p.mantraRoles.length) {
+                return `<span class="inline-flex gap-0.5 flex-wrap">${p.mantraRoles.map(r => `<span class="mr-chip mr-${r}" title="${MANTRA_ROLE_NAMES[r]}">${r}</span>`).join('')}</span>`;
+            }
+            const cls = size === 'sm' ? 'px-1.5 py-0.2 rounded font-bold text-[9px]' : 'px-2 py-0.5 rounded font-bold text-[10px]';
+            return `<span class="role-${(p.role || '').toLowerCase()} ${cls}">${p.role}</span>`;
+        }
+
+        // Quotazione da mostrare: in Mantra preferisce le colonne "M" del listone
+        function displayFvm(p) {
+            if (isMantra() && p.fvmM) return p.fvmM;
+            return p.fvm;
+        }
+
+        // Un giocatore del listone è già acquistato? Confronto per Id Fantacalcio quando c'è, altrimenti per nome
+        function buildPurchasedIndex(purchases) {
+            const ids = new Set();
+            const names = new Set();
+            purchases.forEach(p => {
+                if (p.playerId) ids.add(String(p.playerId));
+                names.add(p.player.toLowerCase());
+            });
+            return {
+                has(listonePlayer) {
+                    if (listonePlayer.id && ids.has(String(listonePlayer.id))) return true;
+                    return names.has(listonePlayer.name.toLowerCase());
+                }
+            };
+        }
+
+        // --- Stato di visualizzazione per-dispositivo (NON condiviso: ognuno guarda la lega/anno/fase che vuole) ---
+        const LOCAL_VIEW_KEY = 'fantasta_view_state';
+        function loadLocalViewState() {
+            try {
+                const s = JSON.parse(localStorage.getItem(LOCAL_VIEW_KEY) || 'null');
+                if (!s) return null;
+                if (s.hiddenSections) hiddenSections = s.hiddenSections;
+                return s;
+            } catch (e) { return null; }
+        }
+        function saveLocalViewState() {
+            try {
+                localStorage.setItem(LOCAL_VIEW_KEY, JSON.stringify({ lega: currentLegaKey, anno: currentAnno, fase: currentFase, hiddenSections }));
+            } catch (e) { /* storage non disponibile: pazienza */ }
+        }
+        function applyLocalViewState() {
+            const s = loadLocalViewState();
+            if (!s) return;
+            if (s.lega && leghe[s.lega]) {
+                currentLegaKey = s.lega;
+                if (s.anno && leghe[s.lega].anni[s.anno]) currentAnno = s.anno;
+                if (s.fase === 'settembre' || s.fase === 'riparazione') currentFase = s.fase;
+            }
+        }
+
         function getReleasedSettembreIds() {
             const rip = getFaseObj('riparazione');
             return new Set((rip.releases || []).map(r => r.purchaseId));
@@ -647,9 +786,17 @@
             const sett = getFaseObj('settembre');
             const rip = getFaseObj('riparazione');
             if (!rip.listone || rip.listone.length === 0) return [];
-            const ripNames = new Set(rip.listone.map(p => p.name.toLowerCase()));
             const releasedIds = getReleasedSettembreIds();
-            return sett.purchases.filter(p => !releasedIds.has(p.id) && !ripNames.has(p.player.toLowerCase()));
+            return sett.purchases.filter(p => !releasedIds.has(p.id) && !isStillInListone(p, rip.listone));
+        }
+
+        // Il giocatore acquistato è ancora nel listone indicato? Per Id se disponibile su entrambi, altrimenti per nome
+        function isStillInListone(purchase, listone) {
+            if (purchase.playerId && listone.some(p => p.id)) {
+                return listone.some(p => String(p.id) === String(purchase.playerId));
+            }
+            const name = purchase.player.toLowerCase();
+            return listone.some(p => p.name.toLowerCase() === name);
         }
 
         // --- Banner di stato sincronizzazione: rende visibili gli errori invece di nasconderli in console ---
@@ -699,15 +846,14 @@
 
             data.forEach(row => {
                 if (row.id === 'fanta_leghe' && row.data) { leghe = row.data; foundModernLeghe = true; }
-                if (row.id === 'fanta_current_lega' && row.data) currentLegaKey = row.data;
-                if (row.id === 'fanta_current_anno' && row.data) currentAnno = row.data;
-                if (row.id === 'fanta_current_fase' && row.data) currentFase = row.data;
+                // fanta_current_lega/anno/fase e fanta_hidden_sections NON vengono più letti dal server:
+                // sono scelte di visualizzazione di ciascun dispositivo (vedi saveLocalViewState),
+                // altrimenti chi cambia lega/fase la cambia a tutti quelli collegati.
 
                 if (row.id === 'fanta_favorites_map' && row.data) favoritesMap = row.data;
                 if (row.id === 'fanta_custom_values_map' && row.data) customValuesMap = row.data;
                 if (row.id === 'fanta_player_notes_map' && row.data) playerNotesMap = row.data;
                 if (row.id === 'fanta_player_tiers_map' && row.data) playerTiersMap = row.data;
-                if (row.id === 'fanta_hidden_sections' && row.data) hiddenSections = row.data;
                 if (row.id === 'fanta_custom_tiers_config' && row.data) customTiersConfig = row.data;
 
                 // Dati del vecchio formato (prima della struttura Lega -> Anno -> Fase), usati solo per la migrazione
@@ -747,6 +893,7 @@
 
                 if (data && data.length > 0) {
                     applyRemoteRows(data);
+                    applyLocalViewState();
                     showSyncStatus("✅ Dati sincronizzati da Supabase.", 'success');
                 } else {
                     showSyncStatus("ℹ️ Nessun dato trovato su Supabase: sto usando i valori di default locali (verranno salvati al primo cambiamento).", 'info');
@@ -782,7 +929,14 @@
         }
 
         // Funzione per salvare tutti i dati in batch su Supabase
+        // Cambia solo cosa si sta guardando su questo dispositivo: nessun salvataggio online
+        function saveViewOnly() {
+            saveLocalViewState();
+            renderAll();
+        }
+
         async function saveState() {
+            saveLocalViewState();
             renderAll(); // Aggiorna subito l'interfaccia localmente
             try {
                 if (!_supabase) {
@@ -791,14 +945,10 @@
                 }
                 const payload = [
                     { id: 'fanta_leghe', data: leghe },
-                    { id: 'fanta_current_lega', data: currentLegaKey },
-                    { id: 'fanta_current_anno', data: currentAnno },
-                    { id: 'fanta_current_fase', data: currentFase },
                     { id: 'fanta_favorites_map', data: favoritesMap },
                     { id: 'fanta_custom_values_map', data: customValuesMap },
                     { id: 'fanta_player_notes_map', data: playerNotesMap },
                     { id: 'fanta_player_tiers_map', data: playerTiersMap },
-                    { id: 'fanta_hidden_sections', data: hiddenSections },
                     { id: 'fanta_custom_tiers_config', data: customTiersConfig }
                 ];
 
@@ -845,7 +995,7 @@
 
         function toggleSection(roleKey) {
             hiddenSections[roleKey] = !hiddenSections[roleKey];
-            saveState();
+            saveViewOnly();
         }
 
         function setRating(playerName, starsCount) {
@@ -980,21 +1130,24 @@
                 }
             }
             currentLegaKey = legaKey;
-            currentAnno = Object.keys(leghe[legaKey].anni)[0];
+            currentAnno = Object.keys(leghe[legaKey].anni).sort().pop();
             currentFase = 'settembre';
-            saveState();
+            resetAssignForm();
+            saveViewOnly();
         }
 
         function switchAnno(annoKey) {
             if (!getLega().anni[annoKey]) return;
             currentAnno = annoKey;
             currentFase = 'settembre';
-            saveState();
+            resetAssignForm();
+            saveViewOnly();
         }
 
         function switchFase(fase) {
             currentFase = fase;
-            saveState();
+            resetAssignForm();
+            saveViewOnly();
         }
 
         function deleteCurrentLega() {
@@ -1025,6 +1178,7 @@
         function createNewSlot() {
             const name = document.getElementById('new-slot-name-input').value.trim();
             const psw = document.getElementById('new-slot-psw-input').value.trim();
+            const mode = document.getElementById('new-slot-mode-input').value === 'mantra' ? 'mantra' : 'classic';
             if (!name) { alert("Inserisci un nome valido."); return; }
             if (leghe[name]) { alert("Esiste già una lega con questo nome."); return; }
 
@@ -1033,7 +1187,9 @@
                 config: {
                     initialBudget: 500,
                     managers: ['Giocatore 1', 'Giocatore 2', 'Giocatore 3', 'Giocatore 4', 'Giocatore 5', 'Giocatore 6', 'Giocatore 7', 'Giocatore 8'],
-                    slots: { POR: 3, DIF: 8, CEN: 8, ATT: 6 }
+                    slots: { POR: 3, DIF: 8, CEN: 8, ATT: 6 },
+                    mode,
+                    rosterSize: DEFAULT_MANTRA_ROSTER_SIZE
                 },
                 anni: { "2026": nuovoAnnoVuoto() }
             };
@@ -1137,7 +1293,7 @@
                 <div class="bg-slate-900/60 border border-red-500/30 rounded-xl p-2.5 flex items-center justify-between gap-2 text-xs">
                     <div class="min-w-0">
                         <div class="flex items-center gap-1.5">
-                            <span class="role-${p.role.toLowerCase()} px-1.5 py-0.2 rounded font-bold text-[9px]">${p.role}</span>
+                            ${roleBadgesHtml(p, 'sm')}
                             <span class="font-bold text-white truncate">${p.player}</span>
                         </div>
                         <div class="text-[10px] text-slate-400">di <strong class="text-indigo-300">${p.owner}</strong> — pagato ${p.price}€</div>
@@ -1157,8 +1313,7 @@
             if (!purchase) return;
             if (getReleasedSettembreIds().has(purchaseId)) { alert('Questo giocatore è già stato svincolato.'); return; }
 
-            const ripNames = new Set((rip.listone || []).map(p => p.name.toLowerCase()));
-            const stillListed = ripNames.has(purchase.player.toLowerCase());
+            const stillListed = isStillInListone(purchase, rip.listone || []);
             const refund = stillListed ? Math.ceil(purchase.price / 2) : purchase.price;
             const label = stillListed ? '50% (è ancora nel listone: torna disponibile per tutti)' : '100% (non è più presente nel listone di gennaio)';
 
@@ -1211,115 +1366,98 @@
                 try {
                     const data = new Uint8Array(e.target.result);
                     const workbook = XLSX.read(data, { type: 'array' });
-
-                    const firstSheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[firstSheetName];
-
+                    // Il file di Fantacalcio.it ha più fogli (Tutti, Portieri, ..., Ceduti): si usa "Tutti" se c'è, altrimenti il primo
+                    const sheetName = workbook.SheetNames.find(n => n.trim().toLowerCase() === 'tutti') || workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
                     const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
 
+                    // Cerca la riga di intestazione (nel file ufficiale la prima riga è un titolo) e mappa le colonne per nome esatto
                     let headerIndex = -1;
                     let colMap = {};
-
                     for (let r = 0; r < Math.min(rawRows.length, 10); r++) {
-                        const row = rawRows[r];
-                        let foundName = false;
-                        let foundRole = false;
-                        let tempMap = {};
-
-                        row.forEach((cell, c) => {
-                            let text = String(cell || "").toUpperCase().trim();
-                            if (text === 'NOME' || text === 'GIOCATORE') { foundName = true; tempMap.name = c; }
-                            if (text === 'R' || text === 'RUOLO') { foundRole = true; tempMap.role = c; }
-                            if (text === 'SQUADRA' || text === 'CLUB') { tempMap.club = c; }
-                            if (text.includes('QT') || text.includes('FVM') || text.includes('VALORE')) { tempMap.fvm = c; }
+                        const tempMap = {};
+                        rawRows[r].forEach((cell, c) => {
+                            const text = String(cell || "").toUpperCase().replace(/\s+/g, ' ').trim();
+                            if (text === 'ID') tempMap.id = c;
+                            else if (text === 'NOME' || text === 'GIOCATORE') tempMap.name = c;
+                            else if (text === 'R' || text === 'RUOLO') tempMap.role = c;
+                            else if (text === 'RM' || text === 'RUOLO MANTRA') tempMap.rm = c;
+                            else if (text === 'SQUADRA' || text === 'CLUB') tempMap.club = c;
+                            else if (text === 'FVM') tempMap.fvm = c;
+                            else if (text === 'FVM M') tempMap.fvmM = c;
+                            else if (text === 'QT.A' || text === 'QT. A') tempMap.qt = c;
+                            else if (text === 'QT.A M' || text === 'QT. A M') tempMap.qtM = c;
+                            else if (tempMap.fallbackValue === undefined && (text.includes('FVM') || text.includes('QT') || text.includes('VALORE'))) tempMap.fallbackValue = c;
                         });
-
-                        if (foundName && foundRole) {
+                        if (tempMap.name !== undefined && (tempMap.role !== undefined || tempMap.rm !== undefined)) {
                             headerIndex = r;
                             colMap = tempMap;
                             break;
                         }
                     }
 
-                    let newListone = [];
-
-                    if (headerIndex !== -1) {
-                        for (let r = headerIndex + 1; r < rawRows.length; r++) {
-                            const row = rawRows[r];
-                            if (!row || row.length === 0) continue;
-
-                            let name = colMap.name !== undefined ? String(row[colMap.name] || "").trim() : "";
-                            let roleRaw = colMap.role !== undefined ? String(row[colMap.role] || "").toUpperCase().trim() : "";
-                            let club = colMap.club !== undefined ? String(row[colMap.club] || "").trim() : "Serie A";
-                            let fvmVal = colMap.fvm !== undefined ? Number(row[colMap.fvm]) : 1;
-
-                            let role = "";
-                            if (roleRaw.includes('P')) role = 'POR';
-                            else if (roleRaw.includes('D')) role = 'DIF';
-                            else if (roleRaw.includes('C')) role = 'CEN';
-                            else if (roleRaw.includes('A')) role = 'ATT';
-
-                            if (!name) {
-                                for (let c = 0; c < row.length; c++) {
-                                    let val = String(row[c] || "").trim();
-                                    if (val && isNaN(val) && val.length > 2 && !['ID', 'RM', 'R', 'SQUADRA', 'FVM', 'QT.A'].includes(val.toUpperCase())) {
-                                        name = val;
-                                        break;
-                                    }
-                                }
-                            }
-
-                            if (name && ['POR', 'DIF', 'CEN', 'ATT'].includes(role)) {
-                                if (!newListone.some(p => p.name.toLowerCase() === name.toLowerCase())) {
-                                    newListone.push({
-                                        name,
-                                        role,
-                                        club: club || 'Serie A',
-                                        fvm: (!isNaN(fvmVal) && fvmVal > 0) ? fvmVal : 1
-                                    });
-                                }
-                            }
-                        }
-                    } else {
-                        const jsonSheet = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
-                        jsonSheet.forEach((row) => {
-                            let name = "", role = "", club = "", fvm = 1;
-                            for (let key in row) {
-                                let valStr = String(row[key] || "").trim();
-                                let upperKey = key.toUpperCase().trim();
-                                if (upperKey === 'NOME' || upperKey === 'GIOCATORE') { if (valStr) name = valStr; }
-                                if (upperKey === 'R' || upperKey === 'RUOLO') {
-                                    let uVal = valStr.toUpperCase();
-                                    if (uVal.includes('P')) role = 'POR';
-                                    else if (uVal.includes('D')) role = 'DIF';
-                                    else if (uVal.includes('C')) role = 'CEN';
-                                    else if (uVal.includes('A')) role = 'ATT';
-                                }
-                                if (upperKey === 'SQUADRA' || upperKey === 'CLUB') { if (valStr) club = valStr; }
-                                if (upperKey.includes('QT') || upperKey.includes('FVM') || upperKey.includes('VALORE')) {
-                                    let num = Number(valStr);
-                                    if (!isNaN(num) && num > 0) fvm = num;
-                                }
-                            }
-                            if (name && ['POR', 'DIF', 'CEN', 'ATT'].includes(role)) {
-                                if (!newListone.some(p => p.name.toLowerCase() === name.toLowerCase())) {
-                                    newListone.push({ name, role, club: club || 'Serie A', fvm: fvm || 1 });
-                                }
-                            }
-                        });
+                    if (headerIndex === -1) {
+                        alert("❌ Non trovo l'intestazione del listone: servono almeno le colonne Nome e R (o RM).");
+                        return;
                     }
 
-                    if (newListone.length > 0) {
-                        getFaseObj().listone = newListone;
-                        populateClubFilter();
-                        saveState();
-                        alert(`✅ Caricati ${newListone.length} giocatori correttamente nel listone di ${currentFase === 'settembre' ? 'Settembre' : 'Riparazione'}!`);
-                    } else {
+                    const num = (row, key) => {
+                        if (colMap[key] === undefined) return 0;
+                        const n = Number(row[colMap[key]]);
+                        return !isNaN(n) && n > 0 ? n : 0;
+                    };
+
+                    const newListone = [];
+                    const seen = new Set();
+                    for (let r = headerIndex + 1; r < rawRows.length; r++) {
+                        const row = rawRows[r];
+                        if (!row || row.length === 0) continue;
+
+                        const name = colMap.name !== undefined ? String(row[colMap.name] || "").trim() : "";
+                        if (!name) continue;
+                        const mantraRoles = colMap.rm !== undefined ? parseMantraRoles(row[colMap.rm]) : [];
+                        let role = colMap.role !== undefined ? parseClassicRole(row[colMap.role]) : '';
+                        if (!role) role = classicRoleFromMantra(mantraRoles);
+                        if (!role) continue;
+
+                        const id = colMap.id !== undefined && String(row[colMap.id]).trim() !== '' ? String(row[colMap.id]).trim() : null;
+                        const dedupKey = id ? 'id:' + id : 'n:' + name.toLowerCase();
+                        if (seen.has(dedupKey)) continue;
+                        seen.add(dedupKey);
+
+                        const fvm = num(row, 'fvm') || num(row, 'qt') || num(row, 'fallbackValue') || 1;
+                        const player = {
+                            name,
+                            role,
+                            club: colMap.club !== undefined ? (String(row[colMap.club] || "").trim() || 'Serie A') : 'Serie A',
+                            fvm
+                        };
+                        if (id) player.id = id;
+                        if (mantraRoles.length) player.mantraRoles = mantraRoles;
+                        const fvmM = num(row, 'fvmM') || num(row, 'qtM');
+                        if (fvmM) player.fvmM = fvmM;
+                        newListone.push(player);
+                    }
+
+                    if (newListone.length === 0) {
                         alert("❌ Impossibile estrarre i giocatori.");
+                        return;
                     }
+
+                    const withMantra = newListone.filter(p => p.mantraRoles).length;
+                    getFaseObj().listone = newListone;
+                    populateClubFilter();
+                    saveState();
+
+                    let msg = `✅ Caricati ${newListone.length} giocatori nel listone di ${currentFase === 'settembre' ? 'Settembre' : 'Riparazione'}!`;
+                    if (withMantra) msg += `\n🎯 Ruoli Mantra letti per ${withMantra} giocatori.`;
+                    if (isMantra() && !withMantra) msg += `\n⚠️ Attenzione: la lega è in modalità Mantra ma nel file non c'è la colonna RM (ruoli Mantra).`;
+                    alert(msg);
                 } catch(err) {
                     console.error(err);
                     alert("❌ Errore nella lettura del file Excel.");
+                } finally {
+                    event.target.value = '';
                 }
             };
             reader.readAsArrayBuffer(file);
@@ -1328,8 +1466,62 @@
         function populateClubFilter() {
             const select = document.getElementById('fa-club-filter');
             if (!select) return;
+            const prev = select.value;
             const clubs = [...new Set(getListone().map(p => p.club))].sort();
-            select.innerHTML = `<option value="ALL">Tutte le Squadre</option>` + clubs.map(c => `<option value="${c}">${c}</option>`).join('');
+            select.innerHTML = `<option value="ALL">Tutte le Squadre</option>` + clubs.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+            if (clubs.includes(prev)) select.value = prev;
+        }
+
+        // Giocatore del listone attualmente selezionato nel box "Assegna Giocatore"
+        let selectedListonePlayer = null;
+
+        function setAssignStepsEnabled(enabled) {
+            const steps = document.getElementById('auction-steps-container');
+            const submitBtn = document.getElementById('submit-btn');
+            const indicator = document.getElementById('step-indicator');
+            if (enabled) {
+                steps.classList.remove('opacity-40', 'pointer-events-none');
+                document.getElementById('input-owner').removeAttribute('disabled');
+                document.getElementById('input-price').removeAttribute('disabled');
+                submitBtn.removeAttribute('disabled');
+                submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                indicator.innerText = "Passo 2: Manager e Prezzo";
+                indicator.className = "text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-normal";
+            } else {
+                steps.classList.add('opacity-40', 'pointer-events-none');
+                document.getElementById('input-owner').setAttribute('disabled', 'true');
+                document.getElementById('input-price').setAttribute('disabled', 'true');
+                submitBtn.setAttribute('disabled', 'true');
+                submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                indicator.innerText = "Passo 1: Cerca giocatore";
+                indicator.className = "text-[10px] bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 px-2 py-0.5 rounded-full font-normal";
+            }
+        }
+
+        function renderSelectedRoleField() {
+            const mantraBox = document.getElementById('input-mantra-roles');
+            const roleSelect = document.getElementById('input-role');
+            const showMantra = isMantra();
+            mantraBox.classList.toggle('hidden', !showMantra);
+            roleSelect.classList.toggle('hidden', showMantra);
+            mantraBox.innerHTML = selectedListonePlayer ? roleBadgesHtml(selectedListonePlayer) : '<span class="text-[11px] text-slate-500">-</span>';
+        }
+
+        // Svuota il box di assegnazione (usato dopo un acquisto e quando si cambia lega/anno/fase)
+        function resetAssignForm() {
+            selectedListonePlayer = null;
+            document.getElementById('input-player').value = '';
+            document.getElementById('input-role').value = 'POR';
+            document.getElementById('input-club').value = '';
+            document.getElementById('input-price').value = '1';
+            document.getElementById('suggestions-box').classList.add('hidden');
+            setAssignStepsEnabled(false);
+            renderSelectedRoleField();
+        }
+
+        function getAvailableListone() {
+            const purchased = buildPurchasedIndex(getEffectivePurchases());
+            return getListone().filter(p => !purchased.has(p));
         }
 
         function handleSearch(val) {
@@ -1337,18 +1529,11 @@
 
             // Ogni volta che si digita una NUOVA ricerca, i campi Ruolo/Squadra/Prezzo/Manager
             // tornano bloccati e "vuoti" finché non si clicca di nuovo un suggerimento.
-            // Senza questo reset, i campi potevano restare visibili con i dati del giocatore
-            // selezionato in precedenza (es. Ruolo e Squadra sbagliati) mentre si cercava un altro nome.
+            selectedListonePlayer = null;
             document.getElementById('input-role').value = 'POR';
             document.getElementById('input-club').value = '';
-            document.getElementById('auction-steps-container').classList.add('opacity-40', 'pointer-events-none');
-            document.getElementById('input-owner').setAttribute('disabled', 'true');
-            document.getElementById('input-price').setAttribute('disabled', 'true');
-            const submitBtn = document.getElementById('submit-btn');
-            submitBtn.setAttribute('disabled', 'true');
-            submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
-            document.getElementById('step-indicator').innerText = "Passo 1: Cerca giocatore";
-            document.getElementById('step-indicator').className = "text-[10px] bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 px-2 py-0.5 rounded-full font-normal";
+            setAssignStepsEnabled(false);
+            renderSelectedRoleField();
 
             if (!val || val.trim().length === 0) {
                 box.classList.add('hidden');
@@ -1356,80 +1541,90 @@
             }
 
             const query = val.toLowerCase().trim();
-            const purchasedNames = new Set(getEffectivePurchases().map(p => p.player.toLowerCase()));
-            const matches = getListone()
-                .filter(p => p.name.toLowerCase().includes(query) && !purchasedNames.has(p.name.toLowerCase()))
-                .slice(0, 8);
+            const listone = getListone();
+            const purchased = buildPurchasedIndex(getEffectivePurchases());
+            const matches = [];
+            for (let i = 0; i < listone.length && matches.length < 8; i++) {
+                const p = listone[i];
+                if (p.name.toLowerCase().includes(query) && !purchased.has(p)) matches.push(i);
+            }
             if (matches.length === 0) { box.classList.add('hidden'); return; }
 
-            box.innerHTML = matches.map(p => `
-                <div onclick="selectPlayer('${p.name.replace(/'/g, "\\'")}', '${p.role}', '${p.club}')"
-                     class="p-2 hover:bg-indigo-600/30 cursor-pointer flex justify-between items-center text-xs transition">
-                    <span class="font-bold text-white">${p.name} <span class="text-slate-400 font-normal">(${p.club})</span></span>
-                    <span class="role-${p.role.toLowerCase()} px-2 py-0.5 rounded font-bold text-[10px]">${p.role}</span>
-                </div>
-            `).join('');
+            box.innerHTML = matches.map(i => {
+                const p = listone[i];
+                return `
+                <div onclick="selectPlayerByIndex(${i})"
+                     class="p-2 hover:bg-indigo-600/30 cursor-pointer flex justify-between items-center text-xs transition gap-2">
+                    <span class="font-bold text-white">${escapeHtml(p.name)} <span class="text-slate-400 font-normal">(${escapeHtml(p.club)})</span></span>
+                    ${roleBadgesHtml(p)}
+                </div>`;
+            }).join('');
             box.classList.remove('hidden');
         }
 
-        function selectPlayer(name, role, club) {
-            document.getElementById('input-player').value = name;
-            document.getElementById('input-role').value = role;
-            document.getElementById('input-club').value = club;
+        function selectPlayerByIndex(idx) {
+            const p = getListone()[idx];
+            if (!p) return;
+            selectedListonePlayer = p;
+            document.getElementById('input-player').value = p.name;
+            document.getElementById('input-role').value = p.role;
+            document.getElementById('input-club').value = p.club;
             document.getElementById('suggestions-box').classList.add('hidden');
-
-            const stepsContainer = document.getElementById('auction-steps-container');
-            stepsContainer.classList.remove('opacity-40', 'pointer-events-none');
-
-            document.getElementById('input-owner').removeAttribute('disabled');
-            document.getElementById('input-price').removeAttribute('disabled');
-            const submitBtn = document.getElementById('submit-btn');
-            submitBtn.removeAttribute('disabled');
-            submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-
-            document.getElementById('step-indicator').innerText = "Passo 2: Manager e Prezzo";
-            document.getElementById('step-indicator').className = "text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-normal";
-
+            setAssignStepsEnabled(true);
+            renderSelectedRoleField();
             document.getElementById('input-owner').focus();
         }
 
         function randomCallPlayer() {
-            const purchasedNames = new Set(getEffectivePurchases().map(p => p.player.toLowerCase()));
-            const available = getListone().filter(p => !purchasedNames.has(p.name.toLowerCase()));
+            const listone = getListone();
+            const purchased = buildPurchasedIndex(getEffectivePurchases());
+            const availableIdx = [];
+            listone.forEach((p, i) => { if (!purchased.has(p)) availableIdx.push(i); });
 
-            if (available.length === 0) {
+            if (availableIdx.length === 0) {
                 alert("Non ci sono più giocatori liberi!");
                 return;
             }
-            const randomP = available[Math.floor(Math.random() * available.length)];
-            selectPlayer(randomP.name, randomP.role, randomP.club);
+            selectPlayerByIndex(availableIdx[Math.floor(Math.random() * availableIdx.length)]);
         }
 
         function handleAssign(e) {
             e.preventDefault();
-            const player = document.getElementById('input-player').value.trim();
-            const role = document.getElementById('input-role').value;
-            const club = document.getElementById('input-club').value.trim();
+            const p = selectedListonePlayer;
             const owner = document.getElementById('input-owner').value;
             const price = parseInt(document.getElementById('input-price').value);
-            if (!player || !price) return;
+            if (!p) { alert("Seleziona un giocatore dai suggerimenti."); return; }
+            if (!owner) { alert("Scegli il manager."); return; }
+            if (!price || price < 1) { alert("Inserisci un prezzo valido (almeno 1)."); return; }
 
-            getFaseObj().purchases.unshift({ id: Date.now(), player, role, club, owner, price, phase: currentFase });
+            // Controlli: giocatore ancora libero, rosa non piena, slot di ruolo (solo Classic), crediti sufficienti
+            if (buildPurchasedIndex(getEffectivePurchases()).has(p)) {
+                alert(`${p.name} risulta già acquistato.`);
+                return;
+            }
+            const stats = getTeamStats(owner);
+            if (stats.remainingSlots <= 0) {
+                alert(`❌ La rosa di ${owner} è già completa (${stats.totalPlayers}/${stats.totalSlots}).`);
+                return;
+            }
+            if (!isMantra()) {
+                const roleMax = getConfig().slots[p.role] || 0;
+                if ((stats.rolesCount[p.role] || 0) >= roleMax) {
+                    alert(`❌ ${owner} ha già tutti gli slot ${p.role} occupati (${stats.rolesCount[p.role]}/${roleMax}).`);
+                    return;
+                }
+            }
+            if (price > stats.maxBid) {
+                alert(`❌ ${owner} può spendere al massimo ${stats.maxBid}€ per questo giocatore (residuo ${stats.remaining}€, ${stats.remainingSlots} posti ancora da riempire a 1€ minimo).`);
+                return;
+            }
 
-            document.getElementById('input-player').value = '';
-            document.getElementById('input-club').value = '';
-            document.getElementById('input-price').value = '1';
+            const purchase = { id: Date.now(), player: p.name, role: p.role, club: p.club, owner, price, phase: currentFase };
+            if (p.id) purchase.playerId = p.id;
+            if (p.mantraRoles) purchase.mantraRoles = p.mantraRoles;
+            getFaseObj().purchases.unshift(purchase);
 
-            document.getElementById('auction-steps-container').classList.add('opacity-40', 'pointer-events-none');
-            document.getElementById('input-owner').setAttribute('disabled', 'true');
-            document.getElementById('input-price').setAttribute('disabled', 'true');
-            const submitBtn = document.getElementById('submit-btn');
-            submitBtn.setAttribute('disabled', 'true');
-            submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
-
-            document.getElementById('step-indicator').innerText = "Passo 1: Cerca giocatore";
-            document.getElementById('step-indicator').className = "text-[10px] bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 px-2 py-0.5 rounded-full font-normal";
-
+            resetAssignForm();
             saveState();
         }
 
@@ -1458,7 +1653,7 @@
                     <div class="bg-slate-800/80 border border-slate-700/60 p-2 rounded-xl flex items-center justify-between text-xs gap-2">
                         <div class="min-w-0 flex-1">
                             <div class="flex items-center gap-1.5">
-                                <span class="role-${p.role.toLowerCase()} px-1.5 py-0.2 rounded font-bold text-[9px]">${p.role}</span>
+                                ${roleBadgesHtml(p, 'sm')}
                                 <span class="font-bold text-white truncate text-[11px]" title="${p.player}">${p.player}</span>
                             </div>
                             <div class="text-[10px] text-slate-400 truncate mt-0.5">
@@ -1494,7 +1689,7 @@
                     <div class="bg-slate-800/80 border border-emerald-700/40 p-2 rounded-xl flex items-center justify-between text-xs gap-2">
                         <div class="min-w-0 flex-1">
                             <div class="flex items-center gap-1.5">
-                                <span class="role-${ev.role.toLowerCase()} px-1.5 py-0.2 rounded font-bold text-[9px]">${ev.role}</span>
+                                ${roleBadgesHtml(ev, 'sm')}
                                 <span class="font-bold text-white truncate text-[11px]">🛒 ${ev.player}</span>
                             </div>
                             <div class="text-[10px] text-slate-400 truncate mt-0.5">a <strong class="text-indigo-300">${ev.owner}</strong></div>
@@ -1509,7 +1704,7 @@
                     <div class="bg-slate-800/80 border border-red-700/40 p-2 rounded-xl flex items-center justify-between text-xs gap-2">
                         <div class="min-w-0 flex-1">
                             <div class="flex items-center gap-1.5">
-                                <span class="role-${ev.role.toLowerCase()} px-1.5 py-0.2 rounded font-bold text-[9px]">${ev.role}</span>
+                                ${roleBadgesHtml(ev, 'sm')}
                                 <span class="font-bold text-white truncate text-[11px]">✂️ ${ev.player}</span>
                             </div>
                             <div class="text-[10px] text-slate-400 truncate mt-0.5">da <strong class="text-indigo-300">${ev.owner}</strong> (${ev.mode === 'full' ? '100%' : '50%'})</div>
@@ -1519,17 +1714,44 @@
             }).join('');
         }
 
+        // Opzioni del filtro ruolo: P/D/C/A in Classic, ruoli Mantra (con preferiti per ruolo) in Mantra
+        function populateRoleFilter() {
+            const select = document.getElementById('fa-role-filter');
+            if (!select) return;
+            const mode = isMantra() ? 'mantra' : 'classic';
+            if (select.dataset.mode === mode) return;
+            select.dataset.mode = mode;
+            if (mode === 'mantra') {
+                select.innerHTML = `<option value="ALL">Tutti i Ruoli</option><option value="FAV_ALL">⭐ Tutti i Preferiti</option>`
+                    + MANTRA_ROLES.map(r => `<option value="FAV_MR_${r}">⭐ Preferiti ${r} (${MANTRA_ROLE_NAMES[r]})</option>`).join('')
+                    + MANTRA_ROLES.map(r => `<option value="MR_${r}">${r} - ${MANTRA_ROLE_NAMES[r]}</option>`).join('');
+            } else {
+                select.innerHTML = `<option value="ALL">Tutti i Ruoli</option><option value="FAV_ALL">⭐ Tutti i Preferiti</option>
+                    <option value="FAV_POR">⭐ Preferiti Portieri</option><option value="FAV_DIF">⭐ Preferiti Difensori</option>
+                    <option value="FAV_CEN">⭐ Preferiti Centrocampisti</option><option value="FAV_ATT">⭐ Preferiti Attaccanti</option>
+                    <option value="POR">Portieri</option><option value="DIF">Difensori</option>
+                    <option value="CEN">Centrocampisti</option><option value="ATT">Attaccanti</option>`;
+            }
+            select.value = 'ALL';
+        }
+
+        // Un giocatore passa il filtro ruolo se ha quel ruolo (in Mantra basta averne uno tra i suoi)
+        function matchesRoleFilter(p, roleKey) {
+            if (roleKey === 'ALL') return true;
+            if (roleKey.startsWith('MR_')) return (p.mantraRoles || []).includes(roleKey.slice(3));
+            return p.role === roleKey;
+        }
+
         function renderFreeAgents() {
             populateTierDropdowns();
+            populateRoleFilter();
             const tbody = document.getElementById('free-agents-tbody');
             const searchVal = (document.getElementById('fa-search-input').value || '').toLowerCase().trim();
             const roleFilter = document.getElementById('fa-role-filter').value;
             const tierFilter = document.getElementById('fa-tier-filter').value;
             const clubFilter = document.getElementById('fa-club-filter').value;
 
-            const purchasedNames = new Set(getEffectivePurchases().map(p => p.player.toLowerCase()));
-
-            let available = getListone().filter(p => !purchasedNames.has(p.name.toLowerCase()));
+            let available = getAvailableListone();
 
             let tierCounts = {};
             customTiersConfig.forEach(t => tierCounts[t.name] = 0);
@@ -1557,12 +1779,12 @@
 
             if (isFavoriteView) {
                 available = available.filter(p => (favoritesMap[p.name] || 0) > 0);
-                const subRole = roleFilter.split('_')[1];
+                const subRole = roleFilter.slice(4);
                 if (subRole !== 'ALL') {
-                    available = available.filter(p => p.role === subRole);
+                    available = available.filter(p => matchesRoleFilter(p, subRole));
                 }
             } else if (roleFilter !== 'ALL') {
-                available = available.filter(p => p.role === roleFilter);
+                available = available.filter(p => matchesRoleFilter(p, roleFilter));
             }
 
             if (tierFilter !== 'ALL') {
@@ -1586,8 +1808,8 @@
                     return indexA - indexB;
                 }
 
-                let fvmA = Number(a.fvm) || 0;
-                let fvmB = Number(b.fvm) || 0;
+                let fvmA = Number(displayFvm(a)) || 0;
+                let fvmB = Number(displayFvm(b)) || 0;
                 return fvmB - fvmA;
             });
 
@@ -1617,21 +1839,21 @@
 
                 return `
                     <tr class="hover:bg-slate-800/50 border-b border-slate-800 transition">
-                        <td class="px-3.5 py-2 font-bold text-white">${p.name}</td>
-                        <td class="px-3.5 py-2"><span class="role-${p.role.toLowerCase()} px-2 py-0.5 rounded text-[10px] font-bold">${p.role}</span></td>
-                        <td class="px-3.5 py-2 text-slate-300">${p.club}</td>
+                        <td class="px-3.5 py-2 font-bold text-white">${escapeHtml(p.name)}</td>
+                        <td class="px-3.5 py-2">${roleBadgesHtml(p)}</td>
+                        <td class="px-3.5 py-2 text-slate-300">${escapeHtml(p.club)}</td>
                         <td class="px-3.5 py-2">
                             <select onchange="updatePlayerTier('${p.name.replace(/'/g, "\\'")}', this.value)" style="${selectStyle}" class="border rounded-lg px-2 py-1 text-xs font-bold focus:outline-none cursor-pointer">
                                 ${tierOptionsHtml}
                             </select>
                         </td>
-                        <td class="px-3.5 py-2 text-right font-mono text-indigo-300 font-bold">${p.fvm || '-'}</td>
+                        <td class="px-3.5 py-2 text-right font-mono text-indigo-300 font-bold">${displayFvm(p) || '-'}</td>
                         <td class="px-3.5 py-2 text-right">
                             <input type="number" min="0" value="${customVal}" onchange="updateCustomValue('${p.name.replace(/'/g, "\\'")}', this.value)" placeholder="-"
                                 class="w-16 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-right text-emerald-400 font-mono font-bold text-xs focus:outline-none focus:border-indigo-500">
                         </td>
                         <td class="px-3.5 py-2">
-                            <input type="text" value="${playerNote}" onchange="updatePlayerNote('${p.name.replace(/'/g, "\\'")}', this.value)" placeholder="Note..."
+                            <input type="text" value="${escapeHtml(playerNote)}" onchange="updatePlayerNote('${p.name.replace(/'/g, "\\'")}', this.value)" placeholder="Note..."
                                 class="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-indigo-500">
                         </td>
                         <td class="px-3.5 py-2 text-center whitespace-nowrap">${starsHtml}</td>
@@ -1721,7 +1943,7 @@
             const spent = grossSpent - refunds;
             const remaining = config.initialBudget - spent;
 
-            const totalSlots = (config.slots.POR || 0) + (config.slots.DIF || 0) + (config.slots.CEN || 0) + (config.slots.ATT || 0);
+            const totalSlots = getTotalSlots();
             const remainingSlots = Math.max(0, totalSlots - teamP.length);
 
             const maxBid = Math.max(0, remaining - (remainingSlots > 0 ? remainingSlots - 1 : 0));
@@ -1729,7 +1951,12 @@
             const rolesCount = { POR: 0, DIF: 0, CEN: 0, ATT: 0 };
             teamP.forEach(p => rolesCount[p.role] = (rolesCount[p.role] || 0) + 1);
 
-            return { spent, remaining, totalPlayers: teamP.length, totalSlots, remainingSlots, maxBid, rolesCount, purchases: teamP };
+            // Copertura Mantra: quanti giocatori in rosa possono giocare in ciascun ruolo (un multi-ruolo conta per tutti i suoi)
+            const mantraCoverage = {};
+            MANTRA_ROLES.forEach(r => mantraCoverage[r] = 0);
+            teamP.forEach(p => (p.mantraRoles || []).forEach(r => { if (mantraCoverage[r] !== undefined) mantraCoverage[r]++; }));
+
+            return { spent, remaining, totalPlayers: teamP.length, totalSlots, remainingSlots, maxBid, rolesCount, mantraCoverage, purchases: teamP };
         }
 
         function renderTeamsOverview() {
@@ -1784,12 +2011,17 @@
                                 <div class="font-bold text-white text-xs truncate" title="${m}">${m}</div>
                                 <span class="text-[8px] font-bold px-1.5 py-0.2 rounded border ${badgeClass}">${badgeText}</span>
                             </div>
+                            ${isMantra() ? `
+                            <div class="text-[10px] text-slate-400 mb-1">Rosa: <strong class="text-indigo-300 font-mono">${stats.totalPlayers}/${stats.totalSlots}</strong></div>
+                            <div class="flex items-center gap-0.5 mb-1 flex-wrap" title="Giocatori in rosa che possono coprire ciascun ruolo">
+                                ${MANTRA_ROLES.map(r => `<span class="mr-chip mr-${r} ${stats.mantraCoverage[r] ? '' : 'mr-zero'}" title="${MANTRA_ROLE_NAMES[r]}">${r}:${stats.mantraCoverage[r]}</span>`).join('')}
+                            </div>` : `
                             <div class="flex items-center gap-0.5 text-[9px] text-slate-300 font-mono mb-1 flex-wrap justify-between">
                                 <span class="role-por px-1 py-0.5 rounded font-bold">P:${stats.rolesCount.POR}/${config.slots.POR}</span>
                                 <span class="role-dif px-1 py-0.5 rounded font-bold">D:${stats.rolesCount.DIF}/${config.slots.DIF}</span>
                                 <span class="role-cen px-1 py-0.5 rounded font-bold">C:${stats.rolesCount.CEN}/${config.slots.CEN}</span>
                                 <span class="role-att px-1 py-0.5 rounded font-bold">A:${stats.rolesCount.ATT}/${config.slots.ATT}</span>
-                            </div>
+                            </div>`}
                         </div>
                         <div class="pt-1 border-t border-slate-700/80 grid grid-cols-2 gap-1 text-[11px]">
                             <div>
@@ -1843,7 +2075,7 @@
                 const riparazionePurchases = currentFase === 'riparazione' ? getFaseObj('riparazione').purchases.filter(p => p.owner === m) : [];
                 const teamPurchases = [...settembrePurchases, ...riparazionePurchases];
                 const totalCount = teamPurchases.length;
-                const maxSlots = (config.slots.POR || 0) + (config.slots.DIF || 0) + (config.slots.CEN || 0) + (config.slots.ATT || 0);
+                const maxSlots = getTotalSlots();
 
                 let roleStats = {};
                 rolesConfig.forEach(rc => {
@@ -1883,13 +2115,15 @@
 
                 rolesConfig.forEach(roleObj => {
                     const rData = mData.roleStats[roleObj.key];
-                    const maxSlotsRole = config.slots[roleObj.key] || 0;
+                    const mantra = isMantra();
+                    // In Mantra non ci sono slot per reparto: si mostrano solo i giocatori presi
+                    const maxSlotsRole = mantra ? rData.purchases.length : Math.max(config.slots[roleObj.key] || 0, rData.purchases.length);
                     const isHidden = hiddenSections[roleObj.key];
 
                     html += `
                         <div class="space-y-1">
                             <div class="${roleObj.cssClass} px-2 py-0.5 rounded-lg flex justify-between items-center text-xs font-black shadow-sm">
-                                <span>${roleObj.label} (${rData.purchases.length}/${maxSlotsRole})</span>
+                                <span>${roleObj.label} (${rData.purchases.length}${mantra ? '' : '/' + (config.slots[roleObj.key] || 0)})</span>
                                 <span class="font-mono text-white tracking-wide">${rData.spent}€ (${rData.pct}%)</span>
                             </div>
                     `;
@@ -1906,7 +2140,8 @@
                                     : `<button onclick="deletePurchase(${player.id})" class="text-slate-500 hover:text-red-400 font-bold text-[9px]" title="Elimina">×</button>`;
                                 html += `
                                     <div class="fl-player-card px-2 py-0.5 rounded-xl flex justify-between items-center text-[10px] shadow-sm">
-                                        <span class="font-bold text-slate-200 truncate flex-1 text-left" title="${player.player}">${player.player}</span>
+                                        <span class="font-bold text-slate-200 truncate flex-1 text-left" title="${escapeHtml(player.player)}">${escapeHtml(player.player)}</span>
+                                        ${mantra && player.mantraRoles ? `<span class="flex-shrink-0">${roleBadgesHtml(player)}</span>` : ''}
                                         <div class="flex items-center gap-1 pl-1 flex-shrink-0">
                                             <span class="font-mono font-bold text-emerald-400">${player.price}€</span>
                                             ${actionBtn}
@@ -1972,15 +2207,24 @@
             }).join('');
         }
 
+        function toggleConfigModeFields() {
+            const mantra = document.getElementById('cfg-mode').value === 'mantra';
+            document.getElementById('cfg-mantra-fields').classList.toggle('hidden', !mantra);
+            document.getElementById('cfg-classic-fields').classList.toggle('hidden', mantra);
+        }
+
         function openConfigModal() {
             const config = getConfig();
             document.getElementById('modal-slot-name').innerText = currentLegaKey;
             document.getElementById('cfg-budget').value = config.initialBudget;
             document.getElementById('cfg-managers').value = config.managers.join(', ');
+            document.getElementById('cfg-mode').value = config.mode === 'mantra' ? 'mantra' : 'classic';
+            document.getElementById('cfg-roster-size').value = config.rosterSize || DEFAULT_MANTRA_ROSTER_SIZE;
             document.getElementById('cfg-slot-por').value = config.slots.POR;
             document.getElementById('cfg-slot-dif').value = config.slots.DIF;
             document.getElementById('cfg-slot-cen').value = config.slots.CEN;
             document.getElementById('cfg-slot-att').value = config.slots.ATT;
+            toggleConfigModeFields();
             document.getElementById('config-modal').classList.remove('hidden');
             document.getElementById('config-modal').classList.add('flex');
         }
@@ -1990,8 +2234,10 @@
         }
         function saveConfig() {
             const config = getConfig();
-            config.initialBudget = parseInt(document.getElementById('cfg-budget').value) / 1 || 500;
+            config.initialBudget = parseInt(document.getElementById('cfg-budget').value) || 500;
             config.managers = document.getElementById('cfg-managers').value.split(',').map(m => m.trim()).filter(Boolean);
+            config.mode = document.getElementById('cfg-mode').value === 'mantra' ? 'mantra' : 'classic';
+            config.rosterSize = parseInt(document.getElementById('cfg-roster-size').value) || DEFAULT_MANTRA_ROSTER_SIZE;
             config.slots = {
                 POR: parseInt(document.getElementById('cfg-slot-por').value) || 3,
                 DIF: parseInt(document.getElementById('cfg-slot-dif').value) || 8,
@@ -1999,17 +2245,46 @@
                 ATT: parseInt(document.getElementById('cfg-slot-att').value) || 6
             };
             closeConfigModal();
+            resetAssignForm();
             saveState();
         }
 
-        function exportToCSV() {
-            const config = getConfig();
-            let content = config.managers.map(m => `"${m}", ""`).join(',') + "\n";
+        // Scarica un CSV pronto per Excel (separatore ";" e BOM UTF-8 per gli accenti)
+        function downloadCsv(rows, filename) {
+            const cell = v => {
+                const str = String(v == null ? '' : v);
+                return /[";\n]/.test(str) ? '"' + str.replace(/"/g, '""') + '"' : str;
+            };
+            const content = '\uFEFF' + rows.map(r => r.map(cell).join(';')).join('\r\n');
             const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
-            link.download = `FantAsta_${currentLegaKey.replace(/\s+/g, '_')}_${currentAnno}_${currentFase}_Rose.csv`;
+            link.download = filename;
             link.click();
+        }
+
+        function exportFileBase() {
+            return `FantAsta_${currentLegaKey.replace(/\s+/g, '_')}_${currentAnno}_${currentFase}`;
+        }
+
+        // Export completo delle rose: una riga per giocatore, raggruppate per fantasquadra, più riepilogo crediti
+        function exportToCSV() {
+            const config = getConfig();
+            const mantra = isMantra();
+            const roleOrder = { POR: 0, DIF: 1, CEN: 2, ATT: 3 };
+            const rows = [['Fantasquadra', 'Ruolo', ...(mantra ? ['Ruoli Mantra'] : []), 'Giocatore', 'Squadra', 'Prezzo', 'Fase']];
+            const summary = [[], ['Riepilogo'], ['Fantasquadra', 'Giocatori', 'Spesi', 'Residuo']];
+
+            config.managers.forEach(m => {
+                const stats = getTeamStats(m);
+                [...stats.purchases]
+                    .sort((a, b) => (roleOrder[a.role] - roleOrder[b.role]) || (b.price - a.price))
+                    .forEach(p => rows.push([m, p.role, ...(mantra ? [(p.mantraRoles || []).join(';')] : []), p.player, p.club, p.price, p.phase === 'riparazione' ? 'Riparazione' : 'Settembre']));
+                summary.push([m, `${stats.totalPlayers}/${stats.totalSlots}`, stats.spent, stats.remaining]);
+            });
+
+            if (rows.length === 1) { alert("Nessun acquisto da esportare in questa fase."); return; }
+            downloadCsv([...rows, ...summary], `${exportFileBase()}_Rose.csv`);
         }
 
         // Export generico (Ruolo, Nome, Squadra, Fantasquadra, Prezzo) pensato per essere adattato
@@ -2018,15 +2293,13 @@
         function exportForLegheFantacalcio() {
             const purchases = getEffectivePurchases();
             if (purchases.length === 0) { alert("Nessun acquisto da esportare in questa fase."); return; }
-            let content = "Ruolo,Nome,Squadra,Fantasquadra,Prezzo\n";
+            const mantra = isMantra();
+            const rows = [['Id', 'Ruolo', 'Nome', 'Squadra', 'Fantasquadra', 'Prezzo']];
             purchases.forEach(p => {
-                content += `${p.role},"${p.player}","${p.club}","${p.owner}",${p.price}\n`;
+                const ruolo = mantra && p.mantraRoles ? p.mantraRoles.join(';') : p.role;
+                rows.push([p.playerId || '', ruolo, p.player, p.club, p.owner, p.price]);
             });
-            const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = `FantAsta_${currentLegaKey.replace(/\s+/g, '_')}_${currentAnno}_${currentFase}_per-LegheFC.csv`;
-            link.click();
+            downloadCsv(rows, `${exportFileBase()}_per-LegheFC.csv`);
         }
 
         function renderAll() {
@@ -2037,7 +2310,9 @@
             renderDelistedPanel();
             populateClubFilter();
             populateTierDropdowns();
+            populateRoleFilter();
             renderOwnerSelect();
+            renderSelectedRoleField();
             renderTeamsOverview();
             renderLiveHistory();
             renderGoogleSheetsTable();
@@ -2053,7 +2328,10 @@
 
         function renderOwnerSelect() {
             const config = getConfig();
-            document.getElementById('input-owner').innerHTML = config.managers.map(m => `<option value="${m}">${m}</option>`).join('');
+            const select = document.getElementById('input-owner');
+            const prev = select.value; // non perdere il manager scelto quando arriva un aggiornamento in tempo reale
+            select.innerHTML = config.managers.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+            if (config.managers.includes(prev)) select.value = prev;
         }
 
         // Misura l'altezza reale dell'header (che su mobile va su più righe) e sposta di conseguenza
@@ -2066,6 +2344,7 @@
 
         // Avvio all'apertura della pagina caricando i dati da Supabase
         window.onload = () => {
+            applyLocalViewState();
             loadDataFromSupabase();
             syncHeaderHeight();
             window.addEventListener('resize', syncHeaderHeight);
