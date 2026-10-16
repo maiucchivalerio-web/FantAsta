@@ -437,6 +437,7 @@
                                 <th class="px-3.5 py-2.5">Squadra</th>
                                 <th class="px-3.5 py-2.5">Fascia Personalizzata</th>
                                 <th class="px-3.5 py-2.5 text-right">Quotazione (FVM)</th>
+                                <th class="px-3.5 py-2.5 text-center" title="Partite da titolare sulle partite giocate dalla sua squadra (dati reali)">Titolare</th>
                                 <th class="px-3.5 py-2.5 text-right">Mio Valore (€)</th>
                                 <th class="px-3.5 py-2.5">Note Personali</th>
                                 <th class="px-3.5 py-2.5 text-center">Watchlist</th>
@@ -1751,7 +1752,8 @@
                         ${bidders.map(b => `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-slate-900/80 border border-slate-800 ${!b.blocked && b.max >= price ? 'afford-ok' : 'afford-no'}" title="${b.blocked || ''}">${escapeHtml(b.m)} ${b.blocked ? '—' : b.max + '€'}</span>`).join('')}
                     </div>
                 </div>
-                ${mantra ? spotlightModulesHtml(p, bidders) : ''}`;
+                ${mantra ? spotlightModulesHtml(p, bidders) : ''}
+                ${realDataHtml(p)}`;
             box.classList.remove('hidden');
         }
 
@@ -2002,6 +2004,177 @@
             side.style.maxHeight = window.innerWidth >= 768 && h > 0 ? h + 'px' : '';
         }
         window.addEventListener('resize', syncLineupSideHeight);
+
+        // --- Dati reali delle partite giocate (formazioni e cambi da Highlightly, scaricati dal workflow "Aggiorna dati Serie A") ---
+        let _realData = null;   // file grezzo
+        let _realIndex = null;  // statistiche calcolate per giocatore + abbinamenti al listone
+
+        async function loadRealData() {
+            const season = parseInt(SERIE_A_SEASON);
+            try {
+                const res = await fetch(`data/serie-a-${season}.json`, { cache: 'no-cache' });
+                if (!res.ok) return;
+                _realData = await res.json();
+                _realIndex = null;
+                renderAll();
+            } catch (e) { /* file non presente: le sezioni con dati reali restano nascoste */ }
+        }
+
+        function normName(s) {
+            const special = { 'ø': 'o', 'Ø': 'o', 'ı': 'i', 'ł': 'l', 'Ł': 'l', 'đ': 'd', 'Đ': 'd', 'æ': 'ae', 'Æ': 'ae', 'ß': 'ss', 'œ': 'oe' };
+            return String(s || '').replace(/&apos;|'/g, ' ').replace(/[øØıłŁđĐæÆßœ]/g, c => special[c]).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase().replace(/[-.]/g, m => (m === '.' ? '. ' : ' ')).replace(/\s+/g, ' ').trim();
+        }
+
+        // "AC Milan" -> "Milan", "AS Roma" -> "Roma": nome club del listone/calendario
+        function realClubName(apiName) {
+            const n = normName(apiName);
+            return SERIE_A_CLUBS.find(c => n === normName(c) || n.split(' ').includes(normName(c))) || apiName;
+        }
+
+        function buildRealIndex() {
+            if (!_realData) return null;
+            const players = {};      // chiave giocatore API -> statistiche
+            const teamMatches = {};  // club -> partite con formazione disponibile
+            const teamEventMatches = {};
+            const key = (p, club) => (p.id != null ? 'i' + p.id : 'n' + normName(p.name)) + '|' + club;
+            const get = (p, club) => {
+                const k = key(p, club);
+                if (!players[k]) players[k] = { key: k, name: p.name, club, starts: 0, bench: 0, startedIn: new Set(), posCount: {}, startPos: {}, subOn: 0, subOff: 0, offFor: {}, onFor: {}, goals: 0, pens: 0, pensMissed: 0 };
+                return players[k];
+            };
+            const byId = {};
+            const matches = Object.entries(_realData.matches || {}).filter(([, m]) => m.finished && m.lineups);
+            matches.forEach(([mid, m]) => {
+                ['home', 'away'].forEach(side => {
+                    const club = realClubName(m[side]);
+                    const t = m.lineups[side];
+                    if (!t || !t.xi || !t.xi.length) return;
+                    teamMatches[club] = (teamMatches[club] || 0) + 1;
+                    t.xi.flat().forEach(p => {
+                        const st = get(p, club);
+                        st.starts++;
+                        st.startedIn.add(mid);
+                        st.startPos[mid] = p.pos;
+                        st.posCount[p.pos] = (st.posCount[p.pos] || 0) + 1;
+                        if (p.id != null) byId[p.id + '|' + club] = st;
+                    });
+                    (t.bench || []).forEach(p => { const st = get(p, club); st.bench++; if (p.id != null) byId[p.id + '|' + club] = st; });
+                });
+            });
+            matches.forEach(([, m]) => {
+                if (!m.events) return;
+                [m.home, m.away].forEach(n => { const c = realClubName(n); teamEventMatches[c] = (teamEventMatches[c] || 0) + 1; });
+                m.events.forEach(e => {
+                    const type = String(e.type || '');
+                    const club = realClubName(e.team);
+                    const actor = byId[e.playerId + '|' + club];
+                    if (type === 'Substitution') {
+                        const inc = byId[e.inId + '|' + club];
+                        if (actor) { actor.subOff++; if (inc) actor.offFor[inc.key] = (actor.offFor[inc.key] || 0) + 1; }
+                        if (inc) { inc.subOn++; if (actor) inc.onFor[actor.key] = (inc.onFor[actor.key] || 0) + 1; }
+                    } else if (/penalty/i.test(type)) {
+                        if (actor) { if (/miss/i.test(type)) actor.pensMissed++; else actor.pens++; }
+                        if (actor && /goal/i.test(type)) actor.goals++;
+                    } else if (type === 'Goal' && actor) {
+                        actor.goals++;
+                    }
+                });
+            });
+
+            // Abbinamento listone -> giocatore API (stessa squadra, cognome + eventuale iniziale)
+            const byClub = {};
+            Object.values(players).forEach(st => { (byClub[st.club] = byClub[st.club] || []).push(st); });
+            const listMap = {};
+            const listone = [...(getFaseObj('settembre').listone || []), ...(getFaseObj('riparazione').listone || [])];
+            listone.forEach(lp => {
+                const k = lp.id ? 'id' + lp.id : 'n' + lp.name;
+                if (listMap[k] !== undefined) return;
+                const parts = String(lp.name).trim().split(/\s+/);
+                const initTok = parts.length > 1 && /\.$/.test(parts[parts.length - 1]) ? parts.pop() : '';
+                const surname = normName(parts.join(' '));
+                const initial = normName(initTok).replace(/[. ]/g, '');
+                let cands = (byClub[lp.club] || []).filter(st => {
+                    const a = normName(st.name);
+                    const noInit = a.replace(/^[a-z]{1,3}\. /, '');
+                    return a === surname || noInit === surname || a.endsWith(' ' + surname) || noInit.endsWith(' ' + surname);
+                });
+                if (cands.length > 1 && initial) {
+                    const f = cands.filter(st => normName(st.name).startsWith(initial));
+                    if (f.length) cands = f;
+                }
+                listMap[k] = cands.length === 1 ? cands[0] : (cands.length > 1 ? 'ambiguo' : null);
+            });
+
+            const rounds = [...new Set(matches.map(([, m]) => parseInt(String(m.round).replace(/\D+/g, '')) || 0))].filter(Boolean);
+            return { players, teamMatches, teamEventMatches, listMap, maxRound: rounds.length ? Math.max(...rounds) : 0, updated: _realData.updated };
+        }
+
+        function realStatsFor(lp) {
+            if (!_realData) return undefined;
+            if (!_realIndex) _realIndex = buildRealIndex();
+            const k = lp.id ? 'id' + lp.id : 'n' + lp.name;
+            if (_realIndex.listMap[k] === undefined) _realIndex = buildRealIndex(); // listone cambiato
+            return _realIndex.listMap[k];
+        }
+
+        // Chi gioca al suo posto: titolari nello stesso reparto nelle partite in cui lui non è partito titolare,
+        // esclusi i compagni che giocano abitualmente insieme a lui
+        function replacementsFor(st) {
+            const idx = _realIndex;
+            const mainPos = Object.entries(st.posCount).sort((a, b) => b[1] - a[1])[0]?.[0];
+            const teamPlayers = Object.values(idx.players).filter(o => o.club === st.club && o !== st);
+            const teamMatchIds = new Set(teamPlayers.flatMap(o => [...o.startedIn]));
+            const absent = [...teamMatchIds].filter(mid => !st.startedIn.has(mid));
+            if (!absent.length || !mainPos) return { absent: 0, list: [] };
+            const list = teamPlayers.map(o => {
+                const inAbsent = absent.filter(mid => o.startedIn.has(mid) && o.startPos[mid] === mainPos).length;
+                const withHim = [...st.startedIn].filter(mid => o.startedIn.has(mid) && o.startPos[mid] === mainPos).length;
+                const partnerRate = st.starts ? withHim / st.starts : 0;
+                return { o, n: inAbsent, partnerRate };
+            }).filter(x => x.n > 0 && x.partnerRate < 0.6).sort((a, b) => b.n - a.n).slice(0, 2);
+            return { absent: absent.length, list };
+        }
+
+        function shortApiName(st) { return escapeHtml(st.name); }
+
+        function starterBadgeHtml(lp) {
+            const st = realStatsFor(lp);
+            if (st === undefined) return '<span class="text-slate-600">-</span>';
+            if (!st || st === 'ambiguo') return '<span class="text-slate-600" title="Nessun dato abbinato">-</span>';
+            const tot = _realIndex.teamMatches[st.club] || 0;
+            const pct = tot ? st.starts / tot : 0;
+            const cls = pct >= 0.75 ? 'text-emerald-300' : pct >= 0.4 ? 'text-amber-300' : 'text-slate-400';
+            return `<span class="font-mono font-bold ${cls}">${st.starts}/${tot}</span>`;
+        }
+
+        function realDataHtml(lp) {
+            const st = realStatsFor(lp);
+            if (st === undefined) return '';
+            const idx = _realIndex;
+            const head = `<div class="text-[9px] text-slate-400 uppercase font-extrabold tracking-wider mb-1 flex items-center gap-1"><i data-lucide="activity" class="ico w-3 h-3"></i> Dati reali · giornate 1-${idx.maxRound}</div>`;
+            if (!st) return `<div class="mt-2">${head}<div class="text-[11px] text-slate-500">Mai in distinta finora (o nome non trovato nei dati).</div></div>`;
+            if (st === 'ambiguo') return `<div class="mt-2">${head}<div class="text-[11px] text-slate-500">Più giocatori con questo nome nella squadra: dato non mostrato per evitare errori.</div></div>`;
+            const tot = idx.teamMatches[st.club] || 0;
+            const evTot = idx.teamEventMatches[st.club] || 0;
+            const rep = replacementsFor(st);
+            const top = obj => Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([k, n]) => `${escapeHtml(idx.players[k]?.name || '?')} (${n})`).join(', ');
+            const rows = [];
+            rows.push(`<b class="text-white">Titolare ${st.starts}/${tot}</b>${st.bench ? ` · in panchina ${st.bench}` : ''}${st.goals ? ` · ${st.goals} gol` : ''}${st.pens || st.pensMissed ? ` · rigori ${st.pens}/${st.pens + st.pensMissed}` : ''}`);
+            if (rep.absent) {
+                rows.push(rep.list.length
+                    ? `Quando non parte titolare (${rep.absent}): gioca ${rep.list.map(x => `<b class="text-amber-200">${shortApiName(x.o)}</b> (${x.n})`).join(', ')}`
+                    : `Non titolare ${rep.absent} volte: nessun sostituto ricorrente`);
+            } else if (tot) {
+                rows.push(`Sempre titolare finora`);
+            }
+            if (evTot) {
+                if (Object.keys(st.offFor).length) rows.push(`Quando esce entra: ${top(st.offFor)}`);
+                if (st.subOn) rows.push(`Subentrato ${st.subOn} volte${Object.keys(st.onFor).length ? ` (al posto di ${top(st.onFor)})` : ''}`);
+                if (evTot < tot) rows.push(`<span class="text-slate-500">Cambi disponibili per ${evTot}/${tot} partite</span>`);
+            }
+            return `<div class="mt-2 bg-slate-950/50 border border-slate-800 rounded-xl p-2">${head}<div class="space-y-0.5 text-[11px] text-slate-300">${rows.map(r => `<div>${r}</div>`).join('')}</div></div>`;
+        }
 
         // Annulla l'ultimo acquisto registrato nella fase corrente
         function undoLastPurchase() {
@@ -2321,7 +2494,7 @@
 
             document.getElementById('fa-counter-info').innerText = `Mostrando ${available.length} giocatori svincolati.`;
             if (available.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="8" class="text-center py-5 text-slate-500 italic">Nessun giocatore trovato.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="9" class="text-center py-5 text-slate-500 italic">Nessun giocatore trovato.</td></tr>`;
                 return;
             }
 
@@ -2354,6 +2527,7 @@
                             </select>
                         </td>
                         <td class="px-3.5 py-2 text-right font-mono text-indigo-300 font-bold">${displayFvm(p) || '-'}</td>
+                        <td class="px-3.5 py-2 text-center">${starterBadgeHtml(p)}</td>
                         <td class="px-3.5 py-2 text-right">
                             <input type="number" min="0" value="${customVal}" onchange="updateCustomValue('${p.name.replace(/'/g, "\\'")}', this.value)" placeholder="-"
                                 class="w-16 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-right text-emerald-400 font-mono font-bold text-xs focus:outline-none focus:border-indigo-500">
@@ -2991,6 +3165,7 @@
         // Avvio all'apertura della pagina caricando i dati da Supabase
         window.onload = () => {
             refreshIcons();
+            loadRealData();
             applyLocalViewState();
             loadDataFromSupabase();
             syncHeaderHeight();
