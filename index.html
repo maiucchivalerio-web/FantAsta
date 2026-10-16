@@ -216,6 +216,7 @@
             <button id="nav-free-agents" onclick="switchTab('free-agents')" class="nav-tab"><i data-lucide="list-checks" class="w-4 h-4"></i>Listone & Note</button>
             <button id="nav-gk-grid" onclick="switchTab('gk-grid')" class="nav-tab"><i data-lucide="calendar-range" class="w-4 h-4"></i>Griglia & Consigliati</button>
             <button id="nav-teams" onclick="switchTab('teams')" class="nav-tab"><i data-lucide="users" class="w-4 h-4"></i>Rose</button>
+            <button id="nav-clubs" onclick="switchTab('clubs')" class="nav-tab"><i data-lucide="shield" class="w-4 h-4"></i>Guida Squadre</button>
             <button id="nav-stats" onclick="switchTab('stats')" class="nav-tab"><i data-lucide="chart-column" class="w-4 h-4"></i>Statistiche</button>
         </nav>
     </header>
@@ -511,8 +512,21 @@
             </div>
         </div>
 
+        <!-- TAB: GUIDA SQUADRE (probabili formazioni, infortunati, calendario) -->
+        <div id="view-clubs" class="hidden space-y-4 pb-4">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <h2 class="text-sm font-bold text-white flex items-center gap-2"><i data-lucide="shield" class="ico w-4 h-4 text-indigo-300"></i> Guida Squadre</h2>
+                    <span id="clubs-source" class="text-[10px] text-slate-400"></span>
+                </div>
+                <div id="clubs-picker" class="grid grid-cols-4 sm:grid-cols-5 lg:grid-cols-10 gap-1.5"></div>
+            </div>
+            <div id="club-detail" class="grid grid-cols-1 lg:grid-cols-5 gap-4 items-start"></div>
+        </div>
+
         <!-- TAB 5: STATISTICHE -->
         <div id="view-stats" class="hidden space-y-4 pb-4">
+            <div id="deals-panel" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3"></div>
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3" id="top-paid-roles"></div>
             <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
                 <h2 class="text-sm font-bold text-white"><i data-lucide="chart-line" class="ico w-4 h-4 text-emerald-300"></i> Analisi Dettagliata per Fantasquadra</h2>
@@ -1537,7 +1551,7 @@
         }
 
         function switchTab(tab) {
-            ['auction', 'free-agents', 'gk-grid', 'teams', 'stats'].forEach(t => {
+            ['auction', 'free-agents', 'gk-grid', 'teams', 'clubs', 'stats'].forEach(t => {
                 document.getElementById('view-' + t).classList.add('hidden');
                 document.getElementById('nav-' + t).classList.remove('tab-active');
             });
@@ -1548,6 +1562,7 @@
             if (tab === 'gk-grid') renderGkGrid();
             if (tab === 'teams') renderFullTeamsTable();
             if (tab === 'stats') renderStats();
+            if (tab === 'clubs') renderClubs();
         }
 
         function importListoneFile(event) {
@@ -1762,7 +1777,8 @@
                     </div>
                 </div>
                 ${mantra ? spotlightModulesHtml(p, bidders) : ''}
-                ${realDataHtml(p)}`;
+                ${realDataHtml(p)}
+                ${coverHtml(p)}`;
             box.classList.remove('hidden');
         }
 
@@ -2111,7 +2127,8 @@
             [/cruciate ligament/i, 'legamento crociato'], [/hamstring/i, 'bicipite femorale'], [/thigh/i, 'coscia'], [/muscle/i, 'muscolare'],
             [/knee/i, 'ginocchio'], [/ankle/i, 'caviglia'], [/calf/i, 'polpaccio'], [/groin/i, 'inguine'], [/shoulder/i, 'spalla'],
             [/broken finger/i, 'frattura a un dito'], [/broken/i, 'frattura'], [/back/i, 'schiena'], [/foot/i, 'piede'], [/hip/i, 'anca'],
-            [/meniscus/i, 'menisco'], [/tendon/i, 'tendine'], [/achilles/i, 'tendine d\'Achille'], [/head|concussion/i, 'testa'],
+            [/meniscus/i, 'menisco'], [/leg/i, 'gamba'], [/arm/i, 'braccio'], [/surgery/i, 'operazione'], [/appendic/i, 'appendicite'],
+            [/gastro/i, 'disturbi gastrointestinali'], [/club_decision/i, 'scelta del club'], [/coach_decision/i, 'scelta tecnica'], [/tendon/i, 'tendine'], [/achilles/i, 'tendine d\'Achille'], [/head|concussion/i, 'testa'],
             [/illness|sick/i, 'malattia'], [/knock/i, 'botta'], [/physical discomfort/i, 'affaticamento'], [/strain/i, 'stiramento'],
             [/red_card/i, 'espulsione'], [/yellow/i, 'somma di ammonizioni'], [/unknown/i, 'motivo non indicato']
         ];
@@ -2165,7 +2182,7 @@
 
         function normName(s) {
             const special = { 'ø': 'o', 'Ø': 'o', 'ı': 'i', 'ł': 'l', 'Ł': 'l', 'đ': 'd', 'Đ': 'd', 'æ': 'ae', 'Æ': 'ae', 'ß': 'ss', 'œ': 'oe' };
-            return String(s || '').replace(/&apos;|'/g, ' ').replace(/[øØıłŁđĐæÆßœ]/g, c => special[c]).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            return String(s || '').replace(/&apos;|['’`]/g, '').replace(/[øØıłŁđĐæÆßœ]/g, c => special[c]).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
                 .toLowerCase().replace(/[-.]/g, m => (m === '.' ? '. ' : ' ')).replace(/\s+/g, ' ').trim();
         }
 
@@ -2383,6 +2400,201 @@
             const sel = document.getElementById('fa-role-filter');
             if ([...sel.options].some(o => o.value === roleKey)) sel.value = roleKey;
             renderFreeAgents();
+        }
+
+        // --- Collegamenti tra dati reali e listone/acquisti ---
+        // Giocatore del listone corrispondente a un giocatore dei dati Highlightly
+        function listoneOfStat(st) {
+            return getListone().find(p => p.club === st.club && realStatsFor(p) === st) || null;
+        }
+        // Acquisto (nella fase corrente) di un giocatore del listone, se già preso
+        function ownerOf(lp) {
+            return getEffectivePurchases().find(pu => (pu.playerId && lp.id && String(pu.playerId) === String(lp.id)) || pu.player.toLowerCase() === lp.name.toLowerCase()) || null;
+        }
+        function ownerBadgeHtml(lp) {
+            const pu = lp ? ownerOf(lp) : null;
+            return pu ? `<span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-900/70 text-indigo-200">${escapeHtml(pu.owner)} · ${pu.price}€</span>`
+                      : `<span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-900/60 text-emerald-200">Libero</span>`;
+        }
+
+        // --- "Coprilo con": la riserva reale del giocatore all'asta ---
+        function coverHtml(lp) {
+            const st = realStatsFor(lp);
+            if (!st || st === 'ambiguo') return '';
+            const rep = replacementsFor(st);
+            const seen = new Set();
+            const cands = [];
+            rep.list.forEach(x => { if (!seen.has(x.o)) { seen.add(x.o); cands.push({ o: x.o, why: `ha giocato al suo posto ${x.n} ${x.n === 1 ? 'volta' : 'volte'}` }); } });
+            Object.entries(st.offFor).sort((a, b) => b[1] - a[1]).forEach(([k, n]) => {
+                const o = _realIndex.players[k];
+                if (o && !seen.has(o)) { seen.add(o); cands.push({ o, why: `entra quando lui esce (${n})` }); }
+            });
+            if (!cands.length) return '';
+            const listone = getListone();
+            const rows = cands.slice(0, 3).map(c => {
+                const lp2 = listoneOfStat(c.o);
+                if (!lp2) return `<div class="flex items-center gap-2 text-[11px] text-slate-400">${escapeHtml(c.o.name)} <span class="text-slate-500">(non nel listone)</span> · ${c.why}</div>`;
+                const idx = listone.indexOf(lp2);
+                const free = !ownerOf(lp2);
+                return `<div class="flex items-center gap-2 bg-slate-900/70 rounded-lg px-1.5 py-1">
+                    ${playerPhotoHtml(lp2, 'xs')}
+                    <span class="font-bold text-white text-[11px] truncate">${escapeHtml(lp2.name)}</span>
+                    ${roleBadgesHtml(lp2)}${availabilityBadgeHtml(lp2)}
+                    <span class="text-[10px] text-slate-400 truncate flex-1">${c.why} · Qt ${lineupValue(lp2)}</span>
+                    ${ownerBadgeHtml(lp2)}
+                    ${free ? `<button type="button" onclick="selectPlayerByIndex(${idx})" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white">Chiama</button>` : ''}
+                </div>`;
+            }).join('');
+            return `<div class="mt-2 bg-sky-950/30 border border-sky-800/40 rounded-xl p-2">
+                <div class="text-[9px] text-sky-300 uppercase font-extrabold tracking-wider mb-1 flex items-center gap-1"><i data-lucide="shield-plus" class="ico w-3 h-3"></i> Coprilo con (dalle partite giocate)</div>
+                <div class="space-y-1">${rows}</div>
+            </div>`;
+        }
+
+        // --- Affari e sovrapprezzi: prezzo pagato contro valore atteso (FVM riportato al budget della lega) ---
+        function expectedPrice(pu) {
+            const lp = getListone().find(p => (pu.playerId && p.id && String(p.id) === String(pu.playerId)) || p.name.toLowerCase() === pu.player.toLowerCase());
+            if (!lp) return null;
+            const fvm = isMantra() ? (lp.fvmM || lp.fvm) : lp.fvm;
+            if (!fvm) return null;
+            return { lp, exp: Math.max(1, Math.round(fvm * (getConfig().initialBudget || 500) / 1000)) };
+        }
+
+        function renderDeals() {
+            const box = document.getElementById('deals-panel');
+            const config = getConfig();
+            const purchases = getEffectivePurchases();
+            const rows = purchases.map(pu => { const e = expectedPrice(pu); return e ? { pu, ...e, diff: pu.price - e.exp } : null; }).filter(Boolean);
+            const deal = rows.filter(r => r.exp >= 5 && r.diff < 0).sort((a, b) => (a.diff / a.exp) - (b.diff / b.exp)).slice(0, 8);
+            const over = rows.filter(r => r.diff > 0).sort((a, b) => b.diff - a.diff).slice(0, 8);
+            const line = r => `<div class="flex items-center gap-2 bg-slate-950/60 border border-slate-800 rounded-lg px-2 py-1 text-[11px]">
+                ${playerPhotoHtml(r.lp, 'xs')}<span class="font-bold text-white truncate flex-1">${escapeHtml(r.pu.player)} <span class="text-slate-400 font-normal">→ ${escapeHtml(r.pu.owner)}</span></span>
+                <span class="font-mono text-slate-300">${r.pu.price}€</span><span class="text-slate-500">vs</span><span class="font-mono text-slate-400">${r.exp}€</span>
+                <span class="font-mono font-black w-12 text-right ${r.diff < 0 ? 'text-emerald-300' : 'text-red-300'}">${r.diff > 0 ? '+' : ''}${r.diff}€</span></div>`;
+            const macro = ['POR', 'DIF', 'CEN', 'ATT'];
+            const teamRows = config.managers.map(m => {
+                const ps = getTeamStats(m).purchases;
+                const tot = ps.reduce((a, p) => a + p.price, 0);
+                const byR = macro.map(r => ps.filter(p => p.role === r).reduce((a, p) => a + p.price, 0));
+                const starterSpend = ps.filter(p => { const e = expectedPrice(p); return e && isLikelyStarter(e.lp); }).reduce((a, p) => a + p.price, 0);
+                const balance = rows.filter(r => r.pu.owner === m).reduce((a, r) => a + r.diff, 0);
+                return `<tr class="border-t border-slate-800">
+                    <td class="p-1.5 font-bold text-white text-left">${escapeHtml(m)}</td>
+                    ${byR.map(v => `<td class="p-1.5 font-mono">${v}€ <span class="text-slate-500">${tot ? Math.round(v / tot * 100) : 0}%</span></td>`).join('')}
+                    <td class="p-1.5 font-mono">${tot ? Math.round(starterSpend / tot * 100) : 0}%</td>
+                    <td class="p-1.5 font-mono font-bold ${balance <= 0 ? 'text-emerald-300' : 'text-red-300'}">${balance > 0 ? '+' : ''}${balance}€</td>
+                </tr>`;
+            }).join('');
+            box.innerHTML = `
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <h2 class="text-sm font-bold text-white flex items-center gap-2"><i data-lucide="scale" class="ico w-4 h-4 text-amber-300"></i> Affari e sovrapprezzi</h2>
+                    <span class="text-[10px] text-slate-400">Valore atteso = FVM${isMantra() ? ' Mantra' : ''} riportato al budget di ${config.initialBudget}€ (l'FVM è espresso su 1000 crediti)</span>
+                </div>
+                ${rows.length ? `<div class="grid md:grid-cols-2 gap-3">
+                    <div><div class="text-[10px] font-extrabold uppercase tracking-wider text-emerald-300 mb-1.5">Affari migliori</div><div class="space-y-1">${deal.map(line).join('') || '<p class="text-[11px] text-slate-500 italic">Nessuno finora.</p>'}</div></div>
+                    <div><div class="text-[10px] font-extrabold uppercase tracking-wider text-red-300 mb-1.5">Sovrapprezzi più alti</div><div class="space-y-1">${over.map(line).join('') || '<p class="text-[11px] text-slate-500 italic">Nessuno finora.</p>'}</div></div>
+                </div>
+                <div class="overflow-x-auto"><table class="w-full text-[11px] text-center text-slate-300">
+                    <thead class="text-slate-400"><tr><th class="p-1.5 text-left">Partecipante</th>${macro.map(r => `<th class="p-1.5">${r}</th>`).join('')}<th class="p-1.5" title="Quota della spesa andata a giocatori titolari nelle partite giocate">Su titolari</th><th class="p-1.5" title="Somma di (prezzo - valore atteso): negativo = ha speso meno del valore">Saldo valore</th></tr></thead>
+                    <tbody>${teamRows}</tbody>
+                </table></div>` : '<p class="text-[11px] text-slate-500 italic">Ancora nessun acquisto.</p>'}`;
+        }
+
+        // --- Guida squadre ---
+        let _selectedClub = null;
+        function renderClubs() {
+            const picker = document.getElementById('clubs-picker');
+            const src = [];
+            if (_bsdData) src.push(`probabili formazioni e infortuni BSD (agg. ${fmtDate(String(_bsdData.updated).slice(0, 10))})`);
+            if (_realData) src.push('partite giocate Highlightly');
+            document.getElementById('clubs-source').innerText = src.length ? 'Fonti: ' + src.join(' · ') : 'Dati reali non disponibili';
+            if (!_selectedClub) _selectedClub = SERIE_A_CLUBS[0];
+            picker.innerHTML = SERIE_A_CLUBS.map(c => {
+                const [bg, fg] = CLUB_COLORS[c] || ['#334155', '#e2e8f0'];
+                const active = c === _selectedClub;
+                return `<button onclick="selectClub('${c}')" class="flex flex-col items-center gap-1 rounded-xl px-1 py-1.5 border ${active ? 'border-indigo-400 bg-indigo-950/50' : 'border-slate-800 hover:bg-slate-800/60'}">
+                    <span class="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black" style="background:${bg};color:${fg}">${c.slice(0, 3).toUpperCase()}</span>
+                    <span class="text-[10px] font-bold ${active ? 'text-white' : 'text-slate-400'} truncate w-full text-center">${c}</span>
+                </button>`;
+            }).join('');
+            renderClubDetail(_selectedClub);
+        }
+        function selectClub(c) { _selectedClub = c; renderClubs(); }
+
+        function clubListonePlayer(club, apiPlayer) {
+            const names = [apiPlayer.name, apiPlayer.short].filter(Boolean);
+            const found = getListone().filter(lp => lp.club === club && findByListoneName(lp, [apiPlayer], () => names) === apiPlayer);
+            return found.length === 1 ? found[0] : null;
+        }
+
+        function clubPlayerChip(club, ap, compact) {
+            const lp = clubListonePlayer(club, ap);
+            const name = lp ? lp.name : (ap.short || ap.name);
+            return `<div class="flex flex-col items-center text-center ${compact ? '' : 'w-[19%] min-w-[64px]'}">
+                ${lp ? playerPhotoHtml(lp, 'md') : `<span class="ph ph-md" style="background:#334155;color:#e2e8f0">${escapeHtml(initials(ap.name))}</span>`}
+                <span class="pitch-name" title="${escapeHtml(ap.name)}">${escapeHtml(name)}</span>
+                ${lp ? `<span class="mt-0.5 flex flex-col items-center gap-0.5">${roleBadgesHtml(lp)}${ownerBadgeHtml(lp)}</span>` : '<span class="text-[9px] text-slate-300/80">non nel listone</span>'}
+            </div>`;
+        }
+
+        function renderClubDetail(club) {
+            const box = document.getElementById('club-detail');
+            const next = _bsdIndex || (_bsdData ? (_bsdIndex = buildBsdIndex()) : null);
+            const nm = next && next.nextMatch[club];
+            // Campetto con la probabile formazione (righe per reparto: P / D / C / A)
+            let pitchHtml = '<p class="text-[11px] text-slate-500 italic">Probabile formazione non disponibile.</p>';
+            let benchHtml = '';
+            let head = '';
+            if (nm) {
+                const lu = nm.m[nm.side + '_lineup'] || {};
+                const xi = lu.xi || [];
+                const rowsOrder = ['F', 'M', 'D', 'G'];
+                const rows = rowsOrder.map(pos => xi.filter(p => p.pos === pos)).filter(r => r.length);
+                head = `<div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                    <div class="text-sm font-black text-white">${escapeHtml(club)} <span class="text-slate-400 font-bold">${nm.side === 'home' ? 'vs' : '@'} ${escapeHtml(nm.opp)}</span> <span class="text-[11px] text-slate-400 font-normal">${fmtDate(String(nm.m.date).slice(0, 10))}</span></div>
+                    <div class="text-[11px] text-slate-300">Modulo probabile <b class="text-white">${escapeHtml(lu.formation || '?')}</b>${lu.confidence ? ` · affidabilità <b class="text-white">${Math.round(lu.confidence * 100)}%</b>` : ''} ${nm.m.status === 'predicted' ? '<span class="text-amber-300">(stima)</span>' : ''}</div>
+                </div>`;
+                pitchHtml = `<div class="rounded-2xl p-3 space-y-4" style="background:repeating-linear-gradient(180deg,#4d7c0f 0 44px,#57891a 44px 88px);border:2px solid #3f6212">
+                    ${rows.map(r => `<div class="flex justify-center gap-2 flex-wrap">${r.map(p => clubPlayerChip(club, p)).join('')}</div>`).join('')}
+                </div>`;
+                const bench = (lu.bench || []).slice(0, 12);
+                benchHtml = bench.length ? `<div class="mt-3"><div class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1.5">Panchina probabile</div>
+                    <div class="grid grid-cols-3 sm:grid-cols-6 gap-2">${bench.map(p => clubPlayerChip(club, p, true)).join('')}</div></div>` : '';
+            }
+            // Indisponibili dalla rosa
+            const squad = (next && next.squads[club]) || [];
+            const out = squad.filter(p => p.availability && p.availability !== 'available');
+            const lbl = { injured: ['Infortunato', 'text-red-300'], doubtful: ['In dubbio', 'text-amber-300'], suspended: ['Squalificato', 'text-fuchsia-300'] };
+            const outHtml = out.length ? out.map(p => {
+                const lp = clubListonePlayer(club, p);
+                const [t, c] = lbl[p.availability] || [p.availability, 'text-slate-300'];
+                return `<div class="flex items-center gap-2 bg-slate-950/60 border border-slate-800 rounded-lg px-2 py-1 text-[11px]">
+                    ${lp ? playerPhotoHtml(lp, 'xs') : ''}<span class="font-bold text-white truncate">${escapeHtml(lp ? lp.name : p.name)}</span>
+                    <span class="${c} font-bold">${t}</span><span class="text-slate-400 truncate flex-1">${escapeHtml(injuryIt(p.injury))}</span>
+                    <span class="text-slate-300 whitespace-nowrap">${p.return ? fmtReturn(p.return) : ''}</span></div>`;
+            }).join('') : '<p class="text-[11px] text-slate-500 italic">Nessun indisponibile segnalato.</p>';
+            // Prossimi 5 avversari dal calendario
+            const today = new Date().toISOString().slice(0, 10);
+            const nextRounds = SERIE_A_ROUNDS.filter(r => r.date >= today).slice(0, 5).map(r => {
+                const m = r.matches.find(x => x.includes(club));
+                if (!m) return '';
+                const home = m[0] === club;
+                return `<div class="flex items-center justify-between bg-slate-950/60 border border-slate-800 rounded-lg px-2 py-1 text-[11px]">
+                    <span class="text-slate-400">${r.round}ª · ${r.date.slice(8, 10)}/${r.date.slice(5, 7)}</span>
+                    <span class="font-bold text-white">${home ? 'vs' : '@'} ${escapeHtml(home ? m[1] : m[0])}</span>
+                    <span class="text-[9px] font-black px-1.5 rounded ${home ? 'bg-emerald-900/60 text-emerald-200' : 'bg-slate-700 text-slate-200'}">${home ? 'CASA' : 'FUORI'}</span></div>`;
+            }).join('');
+            // Giocatori del listone di questa squadra già acquistati
+            const taken = getListone().filter(lp => lp.club === club).map(lp => ({ lp, pu: ownerOf(lp) })).filter(x => x.pu);
+            const takenHtml = taken.length ? taken.map(x => `<div class="flex items-center gap-2 text-[11px]">${playerPhotoHtml(x.lp, 'xs')}<span class="text-white font-bold truncate flex-1">${escapeHtml(x.lp.name)}</span><span class="text-indigo-300">${escapeHtml(x.pu.owner)}</span><span class="font-mono text-emerald-300">${x.pu.price}€</span></div>`).join('') : '<p class="text-[11px] text-slate-500 italic">Nessuno ancora.</p>';
+
+            box.innerHTML = `
+                <div class="lg:col-span-3 bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">${head}${pitchHtml}${benchHtml}</div>
+                <div class="lg:col-span-2 space-y-3">
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl"><div class="text-xs font-bold text-white mb-2 flex items-center gap-1.5"><i data-lucide="cross" class="ico w-4 h-4 text-red-300"></i> Indisponibili</div><div class="space-y-1">${outHtml}</div></div>
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl"><div class="text-xs font-bold text-white mb-2 flex items-center gap-1.5"><i data-lucide="calendar-range" class="ico w-4 h-4 text-amber-300"></i> Prossime partite</div><div class="space-y-1">${nextRounds}</div></div>
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl"><div class="text-xs font-bold text-white mb-2 flex items-center gap-1.5"><i data-lucide="gavel" class="ico w-4 h-4 text-indigo-300"></i> Già presi all'asta</div><div class="space-y-1">${takenHtml}</div></div>
+                </div>`;
         }
 
         // Annulla l'ultimo acquisto registrato nella fase corrente
@@ -3201,6 +3413,7 @@
                 `;
             }).join('');
 
+            renderDeals();
             document.getElementById('team-stats-cards').innerHTML = config.managers.map(m => {
                 const stats = getTeamStats(m);
                 return `
@@ -3331,6 +3544,7 @@
             if (!document.getElementById('view-free-agents').classList.contains('hidden')) {
                 renderFreeAgents();
             }
+            if (!document.getElementById('view-clubs').classList.contains('hidden')) renderClubs();
             if (!document.getElementById('view-gk-grid').classList.contains('hidden')) {
                 renderGkGrid();
             }
