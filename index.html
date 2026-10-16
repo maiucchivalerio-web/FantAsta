@@ -31,6 +31,25 @@
         .mr-A { background-color: #ffe4e6; color: #9f1239; }
         .mr-Pc { background-color: #fecaca; color: #7f1d1d; }
         .mr-zero { opacity: .35; }
+
+        /* Foto giocatori (campioncini) e avatar con iniziali come riserva */
+        .ph { position: relative; flex-shrink: 0; border-radius: 9999px; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; font-weight: 900; letter-spacing: -.02em; background: #1e293b; }
+        .ph img { width: 100%; height: 100%; object-fit: cover; object-position: top center; }
+        .ph-xs { width: 18px; height: 18px; font-size: 7px; }
+        .ph-sm { width: 26px; height: 26px; font-size: 9px; }
+        .ph-md { width: 34px; height: 34px; font-size: 11px; }
+        .ph-card { width: 112px; height: 150px; border-radius: 14px; font-size: 32px; }
+        .ph-card img { object-fit: contain; object-position: bottom center; }
+
+        .player-spotlight { background: radial-gradient(120% 140% at 0% 0%, rgba(99,102,241,.28), transparent 55%), linear-gradient(135deg, #111a33, #0d1324); border: 1px solid rgba(99,102,241,.35); }
+        .stat-pill { background: rgba(15,23,42,.7); border: 1px solid #1e293b; border-radius: 10px; padding: 4px 8px; text-align: center; }
+        .afford-ok { color: #6ee7b7; }
+        .afford-no { color: #64748b; text-decoration: line-through; }
+
+        .timer-box { font-variant-numeric: tabular-nums; }
+        .timer-warn { color: #fbbf24 !important; }
+        .timer-end { color: #f87171 !important; animation: timerPulse .6s ease-in-out infinite alternate; }
+        @keyframes timerPulse { from { transform: scale(1); } to { transform: scale(1.12); } }
         .star-container { display: inline-flex; gap: 2px; }
         .star-rating { cursor: pointer; color: #475569; transition: all 0.15s ease; font-size: 1.1rem; }
         .star-rating:hover { transform: scale(1.3); color: #fbbf24; }
@@ -263,6 +282,28 @@
                         </button>
                     </div>
 
+                    <!-- Turno di chiamata + timer d'asta -->
+                    <div class="flex flex-wrap items-center justify-between gap-2 bg-slate-950/60 border border-slate-800 rounded-xl px-2.5 py-1.5">
+                        <div class="flex items-center gap-1.5 text-xs">
+                            <span class="text-[10px] text-slate-400 uppercase font-extrabold tracking-wider">🎙️ Chiama:</span>
+                            <button onclick="shiftCallTurn(-1)" class="text-slate-400 hover:text-white px-1 font-bold" title="Turno precedente">◀</button>
+                            <strong id="call-turn-name" class="text-amber-300 font-black">-</strong>
+                            <button onclick="shiftCallTurn(1)" class="text-slate-400 hover:text-white px-1 font-bold" title="Turno successivo">▶</button>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <select id="timer-duration" onchange="resetTimer()" class="bg-slate-800 border border-slate-700 rounded-lg px-1.5 py-0.5 text-[11px] text-slate-200 font-semibold" title="Durata del timer">
+                                <option value="5">5s</option>
+                                <option value="10" selected>10s</option>
+                                <option value="15">15s</option>
+                                <option value="20">20s</option>
+                                <option value="30">30s</option>
+                            </select>
+                            <span id="timer-display" class="timer-box text-lg font-black text-white w-10 text-center font-mono">10</span>
+                            <button type="button" onclick="bumpTimer()" class="bg-amber-600 hover:bg-amber-500 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg" title="Avvia / riparti da capo a ogni rilancio (scorciatoia: barra spaziatrice fuori dai campi di testo)">⏱️ Rilancio</button>
+                            <button type="button" onclick="stopTimer()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold px-2 py-1 rounded-lg border border-slate-700" title="Ferma">■</button>
+                        </div>
+                    </div>
+
                     <form id="assign-form" onsubmit="handleAssign(event)" class="space-y-3">
                         <div class="relative z-50">
                             <label class="block text-[11px] font-bold text-indigo-400 uppercase tracking-wider mb-1">1. Cerca e Seleziona Giocatore</label>
@@ -271,6 +312,9 @@
                                 class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500 font-medium text-xs">
                             <div id="suggestions-box" class="absolute left-0 right-0 top-full mt-1.5 bg-slate-800 border-2 border-indigo-500 rounded-xl shadow-2xl max-h-60 overflow-y-auto hidden z-50 divide-y divide-slate-700"></div>
                         </div>
+
+                        <!-- Card del giocatore all'asta (stile Fantalab) -->
+                        <div id="player-spotlight" class="hidden player-spotlight rounded-2xl p-3"></div>
 
                         <div id="auction-steps-container" class="space-y-3 opacity-40 pointer-events-none transition-all duration-200">
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-2.5">
@@ -291,7 +335,7 @@
                                 </div>
                                 <div>
                                     <label class="block text-[10px] font-bold text-amber-400 uppercase tracking-wider mb-1">3. Prezzo (€)</label>
-                                    <input type="number" id="input-price" min="1" value="1" required disabled
+                                    <input type="number" id="input-price" min="1" value="1" required disabled oninput="renderPlayerSpotlight()"
                                         class="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5 text-white focus:outline-none focus:border-indigo-500 font-bold font-mono text-emerald-400 text-xs">
                                 </div>
                             </div>
@@ -318,7 +362,10 @@
                         <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
                             📋 Storico <span id="history-scope-label">Acquisti</span>
                         </h3>
-                        <span id="history-count-badge" class="text-[10px] bg-slate-800 text-indigo-300 px-1.5 py-0.5 rounded-full font-mono">0</span>
+                        <div class="flex items-center gap-1.5">
+                            <button onclick="undoLastPurchase()" class="text-[10px] bg-slate-800 hover:bg-red-900/60 text-slate-300 hover:text-red-200 border border-slate-700 px-1.5 py-0.5 rounded-lg font-bold" title="Annulla l'ultimo acquisto registrato in questa fase">↩️ Annulla</button>
+                            <span id="history-count-badge" class="text-[10px] bg-slate-800 text-indigo-300 px-1.5 py-0.5 rounded-full font-mono">0</span>
+                        </div>
                     </div>
                     <div id="live-history-container" class="space-y-1.5 overflow-y-auto pr-1 h-[255px] max-h-[255px]">
                         <p class="text-xs text-slate-500 italic text-center py-4">Nessun acquisto registrato.</p>
@@ -518,6 +565,11 @@
                 <label class="block text-xs text-slate-300 mb-1 font-semibold">Nomi Partecipanti (separati da virgola)</label>
                 <textarea id="cfg-managers" rows="2" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-white text-xs"></textarea>
             </div>
+            <div>
+                <label class="block text-xs text-slate-300 mb-1 font-semibold">Indirizzo foto giocatori</label>
+                <input type="text" id="cfg-photo-url" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-white font-mono text-[11px]">
+                <p class="text-[10px] text-slate-500 mt-1">{id} viene sostituito con l'Id del listone. Lascia vuoto per usare solo le iniziali.</p>
+            </div>
 
             <div class="border-t border-slate-800 pt-2.5 space-y-2">
                 <label class="block text-xs font-bold text-indigo-400 uppercase tracking-wider">Modalità di Gioco</label>
@@ -707,6 +759,55 @@
 
         function escapeHtml(s) {
             return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        // --- Foto giocatori ---
+        // I "campioncini" di Fantacalcio.it usano l'Id del listone: .../campioncini/21/card/6397.png
+        const DEFAULT_PHOTO_URL = 'https://content.fantacalcio.it/web/campioncini/21/card/{id}.png';
+        function getPhotoTemplate() {
+            const t = getConfig().photoUrlTemplate;
+            return t === undefined ? DEFAULT_PHOTO_URL : t;
+        }
+
+        // Colori sociali (sfondo, testo) per l'avatar con le iniziali quando la foto non c'è
+        const CLUB_COLORS = {
+            Atalanta: ['#1e3a8a', '#e2e8f0'], Bologna: ['#7f1d1d', '#bfdbfe'], Cagliari: ['#7f1d1d', '#93c5fd'],
+            Como: ['#1d4ed8', '#ffffff'], Empoli: ['#1d4ed8', '#ffffff'], Fiorentina: ['#6b21a8', '#ffffff'],
+            Frosinone: ['#facc15', '#1e3a8a'], Genoa: ['#991b1b', '#1e3a8a'], Inter: ['#1e3a8a', '#0f172a'],
+            Juventus: ['#0f172a', '#ffffff'], Lazio: ['#7dd3fc', '#0f172a'], Lecce: ['#facc15', '#b91c1c'],
+            Milan: ['#b91c1c', '#0f172a'], Monza: ['#dc2626', '#ffffff'], Napoli: ['#0ea5e9', '#ffffff'],
+            Parma: ['#facc15', '#1e3a8a'], Pisa: ['#1e3a8a', '#0f172a'], Roma: ['#7f1d1d', '#fbbf24'],
+            Sassuolo: ['#15803d', '#0f172a'], Torino: ['#7f1d1d', '#ffffff'], Udinese: ['#0f172a', '#ffffff'],
+            Venezia: ['#ea580c', '#14532d'], Verona: ['#1e3a8a', '#facc15'], Cremonese: ['#991b1b', '#94a3b8']
+        };
+
+        // Dato un acquisto (o un giocatore del listone) trova l'Id Fantacalcio, anche per acquisti vecchi salvati senza Id
+        function resolvePlayerId(p) {
+            if (p.id && !p.player) return p.id;
+            if (p.playerId) return p.playerId;
+            const name = (p.player || p.name || '').toLowerCase();
+            for (const fk of ['settembre', 'riparazione']) {
+                const found = (getFaseObj(fk).listone || []).find(x => x.name.toLowerCase() === name);
+                if (found && found.id) return found.id;
+            }
+            return null;
+        }
+
+        function initials(name) {
+            const parts = String(name || '').replace(/\./g, '').trim().split(/\s+/);
+            return ((parts[0] || '').charAt(0) + (parts[1] || '').charAt(0)).toUpperCase() || '?';
+        }
+
+        // Foto rotonda (o card grande) con le iniziali sotto: se l'immagine non si carica resta l'avatar colorato
+        function playerPhotoHtml(p, size) {
+            const name = p.player || p.name || '';
+            const [bg, fg] = CLUB_COLORS[p.club] || ['#334155', '#e2e8f0'];
+            const id = resolvePlayerId(p);
+            const tpl = getPhotoTemplate();
+            const img = id && tpl
+                ? `<img src="${escapeHtml(tpl.replace('{id}', encodeURIComponent(id)))}" alt="" loading="lazy" referrerpolicy="no-referrer" style="position:absolute;inset:0" onerror="this.remove()">`
+                : '';
+            return `<span class="ph ph-${size || 'sm'}" style="background:${bg};color:${fg}" title="${escapeHtml(name)}">${escapeHtml(initials(name))}${img}</span>`;
         }
 
         // Badge ruolo: in Mantra tutti i ruoli del giocatore, in Classic il ruolo P/D/C/A
@@ -1293,7 +1394,7 @@
                 <div class="bg-slate-900/60 border border-red-500/30 rounded-xl p-2.5 flex items-center justify-between gap-2 text-xs">
                     <div class="min-w-0">
                         <div class="flex items-center gap-1.5">
-                            ${roleBadgesHtml(p, 'sm')}
+                            ${playerPhotoHtml(p, 'xs')}${roleBadgesHtml(p, 'sm')}
                             <span class="font-bold text-white truncate">${p.player}</span>
                         </div>
                         <div class="text-[10px] text-slate-400">di <strong class="text-indigo-300">${p.owner}</strong> — pagato ${p.price}€</div>
@@ -1436,6 +1537,8 @@
                         if (mantraRoles.length) player.mantraRoles = mantraRoles;
                         const fvmM = num(row, 'fvmM') || num(row, 'qtM');
                         if (fvmM) player.fvmM = fvmM;
+                        if (num(row, 'qt')) player.qt = num(row, 'qt');
+                        if (num(row, 'qtM')) player.qtM = num(row, 'qtM');
                         newListone.push(player);
                     }
 
@@ -1505,6 +1608,145 @@
             mantraBox.classList.toggle('hidden', !showMantra);
             roleSelect.classList.toggle('hidden', showMantra);
             mantraBox.innerHTML = selectedListonePlayer ? roleBadgesHtml(selectedListonePlayer) : '<span class="text-[11px] text-slate-500">-</span>';
+            renderPlayerSpotlight();
+        }
+
+        // Card grande del giocatore chiamato: foto, ruoli, quotazioni, tue note e chi può ancora permetterselo
+        function renderPlayerSpotlight() {
+            const box = document.getElementById('player-spotlight');
+            const p = selectedListonePlayer;
+            if (!p) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+
+            const mantra = isMantra();
+            const qt = mantra ? (p.qtM || p.qt) : p.qt;
+            const fvm = displayFvm(p);
+            const myValue = customValuesMap[p.name];
+            const note = playerNotesMap[p.name];
+            const stars = favoritesMap[p.name] || 0;
+            const tierName = playerTiersMap[p.name];
+            const tierObj = customTiersConfig.find(t => t.name === tierName);
+            const price = parseInt(document.getElementById('input-price').value) || 1;
+
+            const config = getConfig();
+            const bidders = config.managers.map(m => {
+                const st = getTeamStats(m);
+                let blocked = st.remainingSlots <= 0 ? 'rosa piena' : '';
+                if (!blocked && !mantra && (st.rolesCount[p.role] || 0) >= (config.slots[p.role] || 0)) blocked = `${p.role} pieni`;
+                return { m, max: blocked ? 0 : st.maxBid, blocked };
+            }).sort((a, b) => b.max - a.max);
+
+            const pill = (label, value, cls) => `<div class="stat-pill"><div class="text-[9px] text-slate-400 uppercase font-bold">${label}</div><div class="font-mono font-black text-sm ${cls || 'text-white'}">${value}</div></div>`;
+
+            box.innerHTML = `
+                <div class="flex gap-3 items-stretch">
+                    ${playerPhotoHtml(p, 'card')}
+                    <div class="flex-1 min-w-0 space-y-2">
+                        <div>
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="text-lg font-black text-white leading-tight">${escapeHtml(p.name)}</span>
+                                ${stars ? `<span class="text-amber-400 text-xs">${'★'.repeat(stars)}</span>` : ''}
+                                ${tierObj ? `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md" style="color:${tierObj.color};background:${tierObj.color}22;border:1px solid ${tierObj.color}55">${escapeHtml(tierObj.name)}</span>` : ''}
+                            </div>
+                            <div class="flex items-center gap-2 mt-0.5 text-xs text-slate-400"><span>${escapeHtml(p.club)}</span>${roleBadgesHtml(p)}</div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-1.5">
+                            ${pill('Quotaz.', qt || '-', 'text-indigo-300')}
+                            ${pill('FVM', fvm || '-', 'text-sky-300')}
+                            ${pill('Mio valore', myValue ? myValue + '€' : '-', 'text-emerald-400')}
+                        </div>
+                        ${note ? `<div class="text-[11px] text-slate-300 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1 truncate" title="${escapeHtml(note)}">📝 ${escapeHtml(note)}</div>` : ''}
+                    </div>
+                </div>
+                <div class="mt-2.5">
+                    <div class="text-[9px] text-slate-400 uppercase font-extrabold tracking-wider mb-1">Rilancio massimo per partecipante (a ${price}€)</div>
+                    <div class="flex flex-wrap gap-1">
+                        ${bidders.map(b => `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-slate-900/80 border border-slate-800 ${!b.blocked && b.max >= price ? 'afford-ok' : 'afford-no'}" title="${b.blocked || ''}">${escapeHtml(b.m)} ${b.blocked ? '—' : b.max + '€'}</span>`).join('')}
+                    </div>
+                </div>`;
+            box.classList.remove('hidden');
+        }
+
+        // --- Turno di chiamata (condiviso: salvato nella fase) ---
+        function getCallTurnIndex() {
+            const n = getConfig().managers.length || 1;
+            const t = getFaseObj().callTurn || 0;
+            return ((t % n) + n) % n;
+        }
+        function renderCallTurn() {
+            const managers = getConfig().managers;
+            document.getElementById('call-turn-name').innerText = managers.length ? managers[getCallTurnIndex()] : '-';
+        }
+        function shiftCallTurn(delta) {
+            const fase = getFaseObj();
+            fase.callTurn = (fase.callTurn || 0) + delta;
+            saveState();
+        }
+
+        // --- Timer d'asta (locale: gira sul dispositivo di chi lo usa) ---
+        let _timerEnd = null;
+        let _timerInterval = null;
+        let _audioCtx = null;
+        function timerDuration() { return parseInt(document.getElementById('timer-duration').value) || 10; }
+        function renderTimer(secondsLeft) {
+            const el = document.getElementById('timer-display');
+            el.innerText = secondsLeft;
+            el.classList.toggle('timer-warn', secondsLeft > 0 && secondsLeft <= 3);
+            el.classList.toggle('timer-end', secondsLeft === 0 && _timerEnd !== null);
+        }
+        function beep(freq, ms) {
+            try {
+                _audioCtx = _audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+                const o = _audioCtx.createOscillator();
+                const g = _audioCtx.createGain();
+                o.frequency.value = freq;
+                o.connect(g); g.connect(_audioCtx.destination);
+                g.gain.setValueAtTime(0.25, _audioCtx.currentTime);
+                g.gain.exponentialRampToValueAtTime(0.001, _audioCtx.currentTime + ms / 1000);
+                o.start(); o.stop(_audioCtx.currentTime + ms / 1000);
+            } catch (e) { /* audio non disponibile */ }
+        }
+        // Avvia o fa ripartire da capo il timer (da premere a ogni rilancio)
+        function bumpTimer() {
+            _timerEnd = Date.now() + timerDuration() * 1000;
+            beep(660, 80);
+            if (_timerInterval) clearInterval(_timerInterval);
+            let lastShown = null;
+            _timerInterval = setInterval(() => {
+                const left = Math.max(0, Math.ceil((_timerEnd - Date.now()) / 1000));
+                if (left !== lastShown) {
+                    if (left > 0 && left <= 3) beep(880, 90);
+                    if (left === 0) { beep(440, 700); clearInterval(_timerInterval); _timerInterval = null; }
+                    lastShown = left;
+                    renderTimer(left);
+                }
+            }, 100);
+        }
+        function stopTimer() {
+            if (_timerInterval) clearInterval(_timerInterval);
+            _timerInterval = null;
+            _timerEnd = null;
+            renderTimer(timerDuration());
+        }
+        function resetTimer() { stopTimer(); }
+
+        // Barra spaziatrice = rilancio, quando non si sta scrivendo in un campo
+        document.addEventListener('keydown', (e) => {
+            if (e.code !== 'Space') return;
+            const tag = (e.target.tagName || '').toLowerCase();
+            if (['input', 'textarea', 'select', 'button'].includes(tag)) return;
+            e.preventDefault();
+            bumpTimer();
+        });
+
+        // Annulla l'ultimo acquisto registrato nella fase corrente (e riporta indietro il turno di chiamata)
+        function undoLastPurchase() {
+            const fase = getFaseObj();
+            if (!fase.purchases.length) { alert("Nessun acquisto da annullare in questa fase."); return; }
+            const last = fase.purchases.reduce((a, b) => (b.id > a.id ? b : a));
+            if (!confirm(`Annullare l'ultimo acquisto?\n\n${last.player} a ${last.owner} per ${last.price}€`)) return;
+            fase.purchases = fase.purchases.filter(p => p.id !== last.id);
+            fase.callTurn = (fase.callTurn || 0) - 1;
+            saveState();
         }
 
         // Svuota il box di assegnazione (usato dopo un acquisto e quando si cambia lega/anno/fase)
@@ -1555,7 +1797,7 @@
                 return `
                 <div onclick="selectPlayerByIndex(${i})"
                      class="p-2 hover:bg-indigo-600/30 cursor-pointer flex justify-between items-center text-xs transition gap-2">
-                    <span class="font-bold text-white">${escapeHtml(p.name)} <span class="text-slate-400 font-normal">(${escapeHtml(p.club)})</span></span>
+                    <span class="flex items-center gap-2 min-w-0">${playerPhotoHtml(p, 'md')}<span class="font-bold text-white truncate">${escapeHtml(p.name)} <span class="text-slate-400 font-normal">(${escapeHtml(p.club)})</span></span></span>
                     ${roleBadgesHtml(p)}
                 </div>`;
             }).join('');
@@ -1623,7 +1865,9 @@
             if (p.id) purchase.playerId = p.id;
             if (p.mantraRoles) purchase.mantraRoles = p.mantraRoles;
             getFaseObj().purchases.unshift(purchase);
+            getFaseObj().callTurn = (getFaseObj().callTurn || 0) + 1;
 
+            stopTimer();
             resetAssignForm();
             saveState();
         }
@@ -1653,7 +1897,7 @@
                     <div class="bg-slate-800/80 border border-slate-700/60 p-2 rounded-xl flex items-center justify-between text-xs gap-2">
                         <div class="min-w-0 flex-1">
                             <div class="flex items-center gap-1.5">
-                                ${roleBadgesHtml(p, 'sm')}
+                                ${playerPhotoHtml(p, 'xs')}${roleBadgesHtml(p, 'sm')}
                                 <span class="font-bold text-white truncate text-[11px]" title="${p.player}">${p.player}</span>
                             </div>
                             <div class="text-[10px] text-slate-400 truncate mt-0.5">
@@ -1689,7 +1933,7 @@
                     <div class="bg-slate-800/80 border border-emerald-700/40 p-2 rounded-xl flex items-center justify-between text-xs gap-2">
                         <div class="min-w-0 flex-1">
                             <div class="flex items-center gap-1.5">
-                                ${roleBadgesHtml(ev, 'sm')}
+                                ${playerPhotoHtml(ev, 'xs')}${roleBadgesHtml(ev, 'sm')}
                                 <span class="font-bold text-white truncate text-[11px]">🛒 ${ev.player}</span>
                             </div>
                             <div class="text-[10px] text-slate-400 truncate mt-0.5">a <strong class="text-indigo-300">${ev.owner}</strong></div>
@@ -1704,7 +1948,7 @@
                     <div class="bg-slate-800/80 border border-red-700/40 p-2 rounded-xl flex items-center justify-between text-xs gap-2">
                         <div class="min-w-0 flex-1">
                             <div class="flex items-center gap-1.5">
-                                ${roleBadgesHtml(ev, 'sm')}
+                                ${playerPhotoHtml(ev, 'xs')}${roleBadgesHtml(ev, 'sm')}
                                 <span class="font-bold text-white truncate text-[11px]">✂️ ${ev.player}</span>
                             </div>
                             <div class="text-[10px] text-slate-400 truncate mt-0.5">da <strong class="text-indigo-300">${ev.owner}</strong> (${ev.mode === 'full' ? '100%' : '50%'})</div>
@@ -2139,9 +2383,12 @@
                                     ? `<button onclick="releasePlayer(${player.id})" class="text-amber-400 hover:text-amber-300 font-bold text-[9px]" title="Svincola">✂️</button>`
                                     : `<button onclick="deletePurchase(${player.id})" class="text-slate-500 hover:text-red-400 font-bold text-[9px]" title="Elimina">×</button>`;
                                 html += `
-                                    <div class="fl-player-card px-2 py-0.5 rounded-xl flex justify-between items-center text-[10px] shadow-sm">
-                                        <span class="font-bold text-slate-200 truncate flex-1 text-left" title="${escapeHtml(player.player)}">${escapeHtml(player.player)}</span>
-                                        ${mantra && player.mantraRoles ? `<span class="flex-shrink-0">${roleBadgesHtml(player)}</span>` : ''}
+                                    <div class="fl-player-card pl-0.5 pr-2 py-0.5 rounded-xl flex justify-between items-center gap-1 text-[10px] shadow-sm">
+                                        ${playerPhotoHtml(player, mantra ? 'sm' : 'xs')}
+                                        <span class="flex-1 min-w-0 text-left leading-tight">
+                                            <span class="block font-bold text-slate-200 truncate" title="${escapeHtml(player.player)}">${escapeHtml(player.player)}</span>
+                                            ${mantra && player.mantraRoles ? `<span class="block mt-0.5">${roleBadgesHtml(player)}</span>` : ''}
+                                        </span>
                                         <div class="flex items-center gap-1 pl-1 flex-shrink-0">
                                             <span class="font-mono font-bold text-emerald-400">${player.price}€</span>
                                             ${actionBtn}
@@ -2220,6 +2467,7 @@
             document.getElementById('cfg-managers').value = config.managers.join(', ');
             document.getElementById('cfg-mode').value = config.mode === 'mantra' ? 'mantra' : 'classic';
             document.getElementById('cfg-roster-size').value = config.rosterSize || DEFAULT_MANTRA_ROSTER_SIZE;
+            document.getElementById('cfg-photo-url').value = getPhotoTemplate();
             document.getElementById('cfg-slot-por').value = config.slots.POR;
             document.getElementById('cfg-slot-dif').value = config.slots.DIF;
             document.getElementById('cfg-slot-cen').value = config.slots.CEN;
@@ -2238,6 +2486,7 @@
             config.managers = document.getElementById('cfg-managers').value.split(',').map(m => m.trim()).filter(Boolean);
             config.mode = document.getElementById('cfg-mode').value === 'mantra' ? 'mantra' : 'classic';
             config.rosterSize = parseInt(document.getElementById('cfg-roster-size').value) || DEFAULT_MANTRA_ROSTER_SIZE;
+            config.photoUrlTemplate = document.getElementById('cfg-photo-url').value.trim();
             config.slots = {
                 POR: parseInt(document.getElementById('cfg-slot-por').value) || 3,
                 DIF: parseInt(document.getElementById('cfg-slot-dif').value) || 8,
@@ -2313,6 +2562,7 @@
             populateRoleFilter();
             renderOwnerSelect();
             renderSelectedRoleField();
+            renderCallTurn();
             renderTeamsOverview();
             renderLiveHistory();
             renderGoogleSheetsTable();
