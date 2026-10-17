@@ -335,30 +335,29 @@
 
             <!-- Parte Bassa: Riquadri Partecipanti -->
             <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-                    <h2 class="text-sm font-bold text-white flex items-center justify-between">
-                        <span><i data-lucide="sliders-horizontal" class="ico w-4 h-4 text-emerald-300"></i> Situazione Partecipanti & Rilancio Massimo</span>
+                <button onclick="togglePanel('teams')" class="w-full flex justify-between items-center gap-2 text-left">
+                    <h2 class="text-sm font-bold text-white flex items-center gap-2">
+                        <i data-lucide="sliders-horizontal" class="ico w-4 h-4 text-emerald-300"></i> Situazione Partecipanti & Rilancio Massimo
                     </h2>
-                    <div class="flex items-center gap-2 bg-slate-800/90 border border-slate-700 px-2.5 py-1 rounded-xl">
-                        <span class="text-[11px] text-amber-300 font-bold whitespace-nowrap">Simula Rilancio:</span>
-                        <input type="number" id="sim-bid-price" min="1" value="10" oninput="renderTeamsOverview()" placeholder="Prezzo..."
-                            class="w-16 bg-slate-900 border border-slate-600 rounded-lg px-2 py-0.5 text-right font-mono font-bold text-emerald-400 text-xs focus:outline-none focus:border-indigo-500">
-                        <span class="text-xs text-slate-400">€</span>
-                    </div>
-                </div>
+                    <span class="flex items-center gap-1.5 text-[11px] font-bold text-indigo-300"><span id="teams-toggle-label">Nascondi</span><i data-lucide="chevron-down" id="teams-chevron" class="w-4 h-4 transition-transform" style="transform: rotate(180deg)"></i></span>
+                </button>
+                <div id="teams-body" class="space-y-3">
                 <div class="h-scroll-hint items-center gap-1.5 text-[10px] text-slate-500 mb-1">
                     <i data-lucide="move-horizontal" class="ico w-3.5 h-3.5 "></i> Scorri lateralmente per vedere tutti i partecipanti
                 </div>
                 <div id="teams-overview-grid" class="flex flex-row gap-2 w-full pt-4 pb-2 overflow-x-auto overflow-y-visible"></div>
+                </div>
             </div>
 
             <!-- Scarsità per ruolo: titolari ancora liberi -->
             <div id="scarcity-panel" class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-2">
-                <div class="flex flex-wrap items-center justify-between gap-2">
+                <button onclick="togglePanel('scarcity')" class="w-full flex flex-wrap items-center justify-between gap-2 text-left">
                     <h2 class="text-sm font-bold text-white flex items-center gap-2"><i data-lucide="gauge" class="ico w-4 h-4 text-rose-300"></i> Scarsità per ruolo</h2>
-                    <span id="scarcity-legend" class="text-[10px] text-slate-400"></span>
-                </div>
+                    <span class="flex items-center gap-3"><span id="scarcity-legend" class="text-[10px] text-slate-400"></span><span class="flex items-center gap-1.5 text-[11px] font-bold text-indigo-300"><span id="scarcity-toggle-label">Nascondi</span><i data-lucide="chevron-down" id="scarcity-chevron" class="w-4 h-4 transition-transform" style="transform: rotate(180deg)"></i></span></span>
+                </button>
+                <div id="scarcity-body">
                 <div id="scarcity-chips" class="grid grid-cols-3 sm:grid-cols-6 lg:grid-cols-12 gap-1.5"></div>
+                </div>
             </div>
 
             <!-- Moduli Mantra coperti da ogni rosa (solo in modalità Mantra) -->
@@ -1975,6 +1974,22 @@
             const chev = document.getElementById('modules-chevron');
             if (chev) chev.style.transform = open ? 'rotate(180deg)' : '';
         }
+        // Riquadri richiudibili (Situazione partecipanti, Scarsità): aperti di default, preferenza per dispositivo
+        function isPanelOpen(key) {
+            try { return localStorage.getItem('fantasta_panel_' + key) !== '0'; } catch (e) { return true; }
+        }
+        function applyPanelState(key) {
+            const open = isPanelOpen(key);
+            document.getElementById(key + '-body').classList.toggle('hidden', !open);
+            document.getElementById(key + '-toggle-label').innerText = open ? 'Nascondi' : 'Mostra';
+            const chev = document.getElementById(key + '-chevron');
+            if (chev) chev.style.transform = open ? 'rotate(180deg)' : '';
+        }
+        function togglePanel(key) {
+            try { localStorage.setItem('fantasta_panel_' + key, isPanelOpen(key) ? '0' : '1'); } catch (e) {}
+            applyPanelState(key);
+        }
+
         function toggleModulesPanel() {
             try { localStorage.setItem('fantasta_modules_open', isModulesPanelOpen() ? '0' : '1'); } catch (e) {}
             applyModulesPanelState();
@@ -3446,7 +3461,6 @@
             const config = getConfig();
             const container = document.getElementById('teams-overview-grid');
             const rankingContainer = document.getElementById('ranking-list-container');
-            const simPrice = parseInt(document.getElementById('sim-bid-price').value) || 0;
 
             let maxRemainingBudget = -1;
             const statsMap = {};
@@ -3482,17 +3496,12 @@
                 const isRichest = stats.remaining === maxRemainingBudget;
                 const cardHighlightClass = isRichest ? 'richest-team-card' : 'border-slate-700/60';
 
-                let canAfford = stats.remaining >= simPrice && (stats.remaining - simPrice) >= (stats.remainingSlots > 1 ? stats.remainingSlots - 1 : 0);
-                const badgeClass = canAfford ? 'bg-emerald-950/80 text-emerald-300 border-emerald-600/40' : 'bg-red-950/80 text-red-300 border-red-600/40';
-                const badgeText = canAfford ? '<i data-lucide="check" class="ico w-2.5 h-2.5 "></i>Ok' : '<i data-lucide="x" class="ico w-2.5 h-2.5 "></i>No';
-
                 return `
                     <div class="participant-card bg-slate-800/80 p-2 rounded-xl border ${cardHighlightClass} flex flex-col justify-between space-y-1 relative transition-all">
                         ${isRichest ? '<span class="absolute -top-2.5 right-2 bg-amber-500 text-slate-950 text-[8px] font-black px-1.5 py-0.5 rounded-full shadow tracking-wider">CHIP LEADER</span>' : ''}
                         <div>
                             <div class="flex justify-between items-center mb-1">
                                 <div class="font-bold text-white text-xs truncate" title="${m}">${m}</div>
-                                <span class="inline-flex items-center gap-0.5 text-[8px] font-bold px-1.5 py-0.2 rounded border ${badgeClass}">${badgeText}</span>
                             </div>
                             ${isMantra() ? `
                             <div class="text-[10px] text-slate-400 mb-1 flex justify-between gap-1"><span>Rosa: <strong class="text-indigo-300 font-mono">${stats.totalPlayers}/${stats.totalSlots}</strong></span><button onclick="openLineupModal(${config.managers.indexOf(m)})" class="hover:underline inline-flex items-center gap-0.5" title="Moduli Mantra già schierabili — clicca per il campetto"><i data-lucide="puzzle" class="ico w-3 h-3 text-emerald-300"></i> <strong class="text-emerald-300 font-mono">${Object.values(moduleCoverage(stats.purchases)).filter(m => !m.length).length}/${Object.keys(MANTRA_MODULES).length}</strong></button></div>
@@ -3908,6 +3917,7 @@
         // Avvio all'apertura della pagina caricando i dati da Supabase
         window.onload = () => {
             refreshIcons();
+            ['teams', 'scarcity'].forEach(applyPanelState);
             loadRealData();
             applyLocalViewState();
             loadDataFromSupabase();
