@@ -439,6 +439,7 @@
                         <option value="tier">Ordina: fasce e quotazione</option>
                         <option value="fm">Ordina: fantamedia stimata</option>
                         <option value="starts">Ordina: titolarità</option>
+                        <option value="jolly">Ordina: versatilità (Mantra)</option>
                     </select>
                     <select id="fa-club-filter" onchange="renderFreeAgents()" class="bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-semibold">
                         <option value="ALL">Tutte le Squadre</option>
@@ -1891,11 +1892,12 @@
                     <div class="flex-1 min-w-0">
                         <div class="flex items-center gap-2 flex-wrap">
                             <span class="text-lg font-black text-white leading-tight">${escapeHtml(p.name)}</span>
-                            <span class="text-xs text-slate-400">${escapeHtml(p.club)}</span>${roleBadgesHtml(p)}${availabilityBadgeHtml(p)}${penaltyBadgeHtml(p)}
+                            <span class="text-xs text-slate-400">${escapeHtml(p.club)}</span>${roleBadgesHtml(p)}${versatilityBadgeHtml(p)}${availabilityBadgeHtml(p)}${penaltyBadgeHtml(p)}
                             ${stars ? `<span class="text-amber-400 text-xs">${'★'.repeat(stars)}</span>` : ''}
                             ${tierObj ? `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md" style="color:${tierObj.color};background:${tierObj.color}22;border:1px solid ${tierObj.color}55">${escapeHtml(tierObj.name)}</span>` : ''}
                         </div>
                         ${note ? `<div class="mt-1 text-[11px] text-slate-300 bg-slate-900/70 border border-slate-800 rounded-lg px-2 py-1 truncate" title="${escapeHtml(note)}"><i data-lucide="notebook-pen" class="ico w-3 h-3 text-slate-400"></i> ${escapeHtml(note)}</div>` : ''}
+                        ${mantra ? impactHtml(p) : ''}
                         ${realDataHtml(p)}
                         ${coverHtml(p)}
                     </div>
@@ -2009,14 +2011,14 @@
 
         // Assegnazione ottima posizioni <-> giocatori (algoritmo ungherese): prima copre più posizioni possibili,
         // poi massimizza la somma delle quotazioni. Restituisce per ogni posizione l'indice del giocatore o -1.
-        function bestLineup(players, slots) {
+        function bestLineup(players, slots, valueFn = lineupValue) {
             const n = slots.length, m = Math.max(players.length, n);
             const slotRoles = slots.map(sl => sl.split('/'));
             const BIG = 1e6;
             const cost = (i, j) => {
                 if (j >= players.length) return 0;
                 const roles = players[j].mantraRoles || [];
-                return slotRoles[i].some(r => roles.includes(r)) ? -(BIG + lineupValue(players[j])) : 0;
+                return slotRoles[i].some(r => roles.includes(r)) ? -(BIG + valueFn(players[j])) : 0;
             };
             const u = new Array(n + 1).fill(0), v = new Array(m + 1).fill(0), pRow = new Array(m + 1).fill(0), way = new Array(m + 1).fill(0);
             for (let i = 1; i <= n; i++) {
@@ -2046,6 +2048,124 @@
                 if (i && j - 1 < players.length && cost(i - 1, j - 1) < 0) result[i - 1] = j - 1;
             }
             return result;
+        }
+
+
+        // --- Mantra: formazione migliore per fantamedia, impatto di un acquisto, riserve, versatilità ---
+        // Giocatore del listone corrispondente a un acquisto (o il giocatore stesso se è già del listone)
+        function listoneOfPurchase(p) {
+            if (p.name && !p.player) return p;
+            const id = p.playerId;
+            const name = (p.player || '').toLowerCase();
+            const all = [...(getFaseObj('settembre').listone || []), ...(getFaseObj('riparazione').listone || [])];
+            return all.find(x => (id && String(x.id) === String(id))) || all.find(x => x.name.toLowerCase() === name && x.club === p.club) || null;
+        }
+        // Valore per la formazione: fantamedia stimata, avvicinata a 6 se ha giocato meno di 3 partite (6 se non ci sono dati)
+        function fmValue(p) {
+            const lp = listoneOfPurchase(p);
+            const f = lp && fmFor(lp);
+            if (!f) return 6;
+            const w = Math.min(f.pres, 3) / 3;
+            return f.fm * w + 6 * (1 - w);
+        }
+        // Formazione migliore fra tutti i moduli: prima più posizioni coperte, poi fantamedia più alta
+        function bestFmLineup(players) {
+            const team = players.filter(p => p.mantraRoles && p.mantraRoles.length);
+            const vals = new Map(team.map(p => [p, fmValue(p)]));
+            const val = p => vals.get(p);
+            let best = null;
+            Object.entries(MANTRA_MODULES).forEach(([mod, slots]) => {
+                const assign = bestLineup(team, slots, val);
+                const covered = assign.filter(i => i >= 0).length;
+                const total = assign.reduce((a, i) => a + (i >= 0 ? val(team[i]) : 0), 0);
+                if (!best || covered > best.covered || (covered === best.covered && total > best.total + 1e-9)) best = { mod, slots, assign, covered, total, team };
+            });
+            return best;
+        }
+        // Posizioni della formazione migliore che non hanno una riserva in panchina con lo stesso ruolo
+        function benchGaps(players) {
+            const b = bestFmLineup(players);
+            if (!b) return { lineup: null, gaps: [] };
+            const xi = new Set(b.assign.filter(i => i >= 0));
+            const bench = b.team.filter((_, i) => !xi.has(i));
+            const gaps = [];
+            b.slots.forEach((slot, si) => {
+                if (b.assign[si] < 0) return;
+                const need = slot.split('/');
+                if (!bench.some(p => p.mantraRoles.some(r => need.includes(r)))) gaps.push(slot);
+            });
+            return { lineup: b, gaps: [...new Set(gaps)] };
+        }
+        function benchGapsHtml(players) {
+            if (!players.length) return '';
+            const { gaps } = benchGaps(players);
+            if (!gaps.length) return `<div class="text-[9px] text-emerald-300 mb-1" title="Ogni titolare della formazione migliore ha una riserva dello stesso ruolo">Panchina coperta</div>`;
+            return `<div class="text-[9px] text-slate-400 mb-1 flex items-center gap-0.5 flex-wrap" title="Posizioni della formazione migliore senza una riserva dello stesso ruolo in panchina"><span>Senza riserva:</span>${gaps.map(g => `<span class="px-1 rounded bg-red-950/70 border border-red-800/50 text-red-200 font-bold">${g}</span>`).join('')}</div>`;
+        }
+
+        // Chi sono io (per l'impatto sulla formazione): preferenza di questo dispositivo
+        function getMe() {
+            const managers = getConfig().managers;
+            let me = null;
+            try { me = localStorage.getItem('fantasta_me'); } catch (e) {}
+            if (!managers.includes(me)) {
+                try { me = JSON.parse(localStorage.getItem('fantasta_cal_prefs') || '{}').manager; } catch (e) {}
+            }
+            return managers.includes(me) ? me : managers[0];
+        }
+        function setMe(m) {
+            try { localStorage.setItem('fantasta_me', m); } catch (e) {}
+            renderPlayerSpotlight();
+        }
+        const fm2 = x => x.toFixed(2).replace('.', ',');
+        function impactHtml(p) {
+            if (!p.mantraRoles || !p.mantraRoles.length) return '';
+            const managers = getConfig().managers;
+            const me = getMe();
+            const team = getTeamStats(me).purchases;
+            const before = bestFmLineup(team);
+            const after = bestFmLineup([...team, p]);
+            const pIdx = after.team.length - 1;
+            const si = after.assign.indexOf(pIdx);
+            const v = fmValue(p);
+            let msg;
+            if (si < 0) {
+                msg = `<span class="text-slate-300">Andrebbe <b class="text-white">in panchina</b> nella tua formazione migliore (${after.mod}).</span>`;
+            } else {
+                const out = before ? before.assign.filter(i => i >= 0).map(i => before.team[i]).filter(pl => !after.assign.some(j => j >= 0 && after.team[j] === pl)) : [];
+                const delta = after.total - (before ? before.total : 0);
+                const modTxt = before && before.covered && before.mod !== after.mod ? ` · passi dal <b>${before.mod}</b> al <b>${after.mod}</b>` : ` nel <b>${after.mod}</b>`;
+                const filled = after.covered > (before ? before.covered : 0);
+                const outTxt = out.length ? ` al posto di <b class="text-amber-200">${out.map(o => escapeHtml(o.player)).join(', ')}</b>` : (filled ? ' su una posizione scoperta' : '');
+                msg = `<span class="text-slate-200">Titolare come <b class="text-white">${after.slots[si]}</b>${modTxt}${outTxt}.</span> ${out.length || !filled ? `<b class="${delta > 0.05 ? 'text-emerald-300' : 'text-slate-400'}">${delta >= 0 ? '+' : ''}${fm2(delta)}</b> <span class="text-slate-400">di fantamedia alla formazione</span>` : `<span class="text-slate-400">Posizioni coperte: ${after.covered}/11</span>`}`;
+            }
+            // Riserve: questo acquisto copre una posizione che oggi non ha riserva?
+            const gapsBefore = team.length ? benchGaps(team).gaps : [];
+            const gapsAfter = benchGaps([...team, p]).gaps;
+            const fixed = gapsBefore.filter(g => !gapsAfter.includes(g));
+            const benchTxt = si < 0 && fixed.length ? `<div class="text-emerald-300">Ti darebbe la riserva per: <b>${fixed.join(', ')}</b></div>` : '';
+            return `
+                <div class="mt-2 bg-indigo-950/40 border border-indigo-700/40 rounded-xl p-2 text-[11px] space-y-0.5">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-[9px] text-indigo-300 uppercase font-extrabold tracking-wider flex items-center gap-1"><i data-lucide="trending-up" class="ico w-3 h-3"></i> Impatto sulla tua formazione <span class="normal-case font-semibold text-slate-400">(FM stimata ${fm2(v)})</span></span>
+                        <select onchange="setMe(this.value)" class="bg-slate-900 border border-slate-700 rounded-md px-1 py-0 text-[10px] text-white font-bold" title="Chi sei tu (scelta salvata su questo dispositivo)">${managers.map(m => `<option value="${escapeHtml(m)}" ${m === me ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('')}</select>
+                    </div>
+                    <div>${msg}</div>${benchTxt}
+                </div>`;
+        }
+
+        // Versatilità: quanti tipi di posizione dei moduli Mantra può coprire
+        const MANTRA_SLOT_TYPES = [...new Set(Object.values(MANTRA_MODULES).flat())];
+        function versatility(p) {
+            const roles = p.mantraRoles || [];
+            return { slots: MANTRA_SLOT_TYPES.filter(sl => sl.split('/').some(r => roles.includes(r))) };
+        }
+        function versatilityBadgeHtml(p) {
+            if (!isMantra() || !p.mantraRoles || p.mantraRoles.length < 2) return '';
+            const v = versatility(p);
+            // Solo i veri multiruolo: 3+ ruoli, oppure 2 ruoli che aprono almeno 5 tipi di posizione
+            if (p.mantraRoles.length < 3 && v.slots.length < 5) return '';
+            return `<span class="ml-1 text-[9px] font-black px-1.5 py-0.5 rounded bg-violet-900/70 text-violet-200" title="Multiruolo: può giocare in ${v.slots.length} tipi di posizione dei moduli Mantra (${v.slots.join(', ')})">Jolly ×${v.slots.length}</span>`;
         }
 
         function openLineupModal(managerIdx, moduleName) {
@@ -3174,6 +3294,8 @@
                 // Chi ha meno di 3 presenze va in fondo: una sola partita con gol non deve finire in cima
                 const fmv = p => { const f = fmFor(p); return f ? (f.pres >= 3 ? f.fm : f.fm - 100) : -1000; };
                 available.sort((a, b) => fmv(b) - fmv(a));
+            } else if (sortMode === 'jolly') {
+                available.sort((a, b) => versatility(b).slots.length - versatility(a).slots.length || lineupValue(b) - lineupValue(a));
             } else if (sortMode === 'starts') {
                 const sv = p => { const st = realStatsFor(p); if (!st || st === 'ambiguo') return -1; const t = _realIndex.teamMatches[st.club] || 0; return t ? st.starts / t : -1; };
                 available.sort((a, b) => sv(b) - sv(a) || lineupValue(b) - lineupValue(a));
@@ -3222,7 +3344,7 @@
 
                 return `
                     <tr class="hover:bg-slate-800/50 border-b border-slate-800 transition">
-                        <td class="px-3.5 py-2 font-bold text-white">${escapeHtml(p.name)}${availabilityBadgeHtml(p)}${penaltyBadgeHtml(p)}</td>
+                        <td class="px-3.5 py-2 font-bold text-white">${escapeHtml(p.name)}${versatilityBadgeHtml(p)}${availabilityBadgeHtml(p)}${penaltyBadgeHtml(p)}</td>
                         <td class="px-3.5 py-2">${roleBadgesHtml(p)}</td>
                         <td class="px-3.5 py-2 text-slate-300">${escapeHtml(p.club)}</td>
                         <td class="px-3.5 py-2">
@@ -3507,7 +3629,8 @@
                             <div class="text-[10px] text-slate-400 mb-1 flex justify-between gap-1"><span>Rosa: <strong class="text-indigo-300 font-mono">${stats.totalPlayers}/${stats.totalSlots}</strong></span><button onclick="openLineupModal(${config.managers.indexOf(m)})" class="hover:underline inline-flex items-center gap-0.5" title="Moduli Mantra già schierabili — clicca per il campetto"><i data-lucide="puzzle" class="ico w-3 h-3 text-emerald-300"></i> <strong class="text-emerald-300 font-mono">${Object.values(moduleCoverage(stats.purchases)).filter(m => !m.length).length}/${Object.keys(MANTRA_MODULES).length}</strong></button></div>
                             <div class="flex items-center gap-0.5 mb-1 flex-wrap" title="Giocatori in rosa che possono coprire ciascun ruolo">
                                 ${MANTRA_ROLES.map(r => `<span class="mr-chip mr-${r} ${stats.mantraCoverage[r] ? '' : 'mr-zero'}" title="${MANTRA_ROLE_NAMES[r]}">${r}:${stats.mantraCoverage[r]}</span>`).join('')}
-                            </div>` : `
+                            </div>
+                            ${benchGapsHtml(stats.purchases)}` : `
                             <div class="flex items-center gap-0.5 text-[9px] text-slate-300 font-mono mb-1 flex-wrap justify-between">
                                 <span class="role-por px-1 py-0.5 rounded font-bold">P:${stats.rolesCount.POR}/${config.slots.POR}</span>
                                 <span class="role-dif px-1 py-0.5 rounded font-bold">D:${stats.rolesCount.DIF}/${config.slots.DIF}</span>
