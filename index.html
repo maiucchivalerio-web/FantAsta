@@ -26,6 +26,7 @@
         .hdr-btn { align-items: center; gap: 6px; font-size: 12px; font-weight: 700; padding: 6px 11px; border-radius: 11px; transition: all .15s; white-space: nowrap; }
         details > summary::-webkit-details-marker { display: none; }
         .menu-item { width: 100%; display: flex; align-items: flex-start; gap: 10px; text-align: left; font-size: 12px; color: #e2e8f0; padding: 8px 10px; border-radius: 9px; line-height: 1.25; }
+        .kbd { display: inline-block; min-width: 14px; padding: 0 3px; border: 1px solid #475569; border-bottom-width: 2px; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 9px; color: #cbd5e1; text-align: center; }
         .menu-item:hover { background: rgba(51,65,85,.7); }
         .menu-item svg { margin-top: 2px; flex-shrink: 0; }
         .role-por { background-color: #fef3c7; color: #92400e; }
@@ -202,6 +203,8 @@
                     <div class="absolute right-0 mt-1.5 w-60 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-1 z-50">
                         <button onclick="closeExportMenu(); exportToCSV()" class="menu-item"><i data-lucide="table" class="w-4 h-4 text-emerald-400"></i><span><b>Rose complete</b><br><span class="text-[10px] text-slate-400">CSV per Excel con riepilogo crediti</span></span></button>
                         <button onclick="closeExportMenu(); exportForLegheFantacalcio()" class="menu-item"><i data-lucide="upload" class="w-4 h-4 text-teal-400"></i><span><b>Per Leghe Fantacalcio</b><br><span class="text-[10px] text-slate-400">Id, ruolo, nome, squadra, prezzo</span></span></button>
+                        <button onclick="closeExportMenu(); downloadBackupNow()" class="menu-item"><i data-lucide="hard-drive-download" class="w-4 h-4 text-amber-400"></i><span><b>Backup completo</b><br><span class="text-[10px] text-slate-400">Tutti i dati in un file, ripristinabile</span></span></button>
+                        <button onclick="closeExportMenu(); openBackupModal()" class="menu-item"><i data-lucide="history" class="w-4 h-4 text-sky-400"></i><span><b>Copie di sicurezza</b><br><span class="text-[10px] text-slate-400">Ultime copie automatiche e ripristino</span></span></button>
                     </div>
                 </details>
                 <button onclick="openConfigModal()" class="inline-flex hdr-btn bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 !px-2" title="Impostazioni lega">
@@ -261,7 +264,7 @@
 
                     <form id="assign-form" onsubmit="handleAssign(event)" class="space-y-3">
                         <div class="relative z-50">
-                            <label class="block text-[11px] font-bold text-indigo-400 uppercase tracking-wider mb-1">1. Cerca e Seleziona Giocatore</label>
+                            <label class="flex justify-between items-baseline text-[11px] font-bold text-indigo-400 uppercase tracking-wider mb-1"><span>1. Cerca e Seleziona Giocatore</span><span class="hidden md:inline text-[9px] font-semibold normal-case tracking-normal text-slate-500" title="/ cerca · frecce e Invio scelgono il giocatore · 1-9 scelgono il manager · Invio sul prezzo conferma · Esc svuota"><kbd class="kbd">/</kbd> cerca · <kbd class="kbd">↵</kbd> scegli · <kbd class="kbd">1-9</kbd> manager · <kbd class="kbd">↵</kbd> conferma · <kbd class="kbd">Esc</kbd> svuota</span></label>
                             <input type="text" id="input-player" autocomplete="off" required placeholder="Es. Mbangula, Floriani Mussolini..."
                                 oninput="handleSearch(this.value)" onfocus="handleSearch(this.value)"
                                 class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500 font-medium text-xs">
@@ -585,6 +588,23 @@
     </div>
 
     <!-- Modal Configurazione Lega -->
+    <div id="backup-modal" class="fixed inset-0 bg-black/80 hidden items-center justify-center p-4 z-50 backdrop-blur-sm" onclick="if (event.target === this) closeBackupModal()">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-5 space-y-3 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center">
+                <h3 class="text-sm font-bold text-white flex items-center gap-1.5"><i data-lucide="history" class="ico w-4 h-4 text-sky-300"></i> Copie di sicurezza</h3>
+                <button onclick="closeBackupModal()" class="text-slate-400 hover:text-white text-lg leading-none">×</button>
+            </div>
+            <p class="text-[11px] text-slate-400">A ogni acquisto o modifica fatta da questo dispositivo viene salvata una copia nel browser (le ultime 10). Se qualcosa va storto puoi tornare indietro.</p>
+            <div id="backup-list" class="space-y-1.5"></div>
+            <div class="flex gap-2 pt-1">
+                <button onclick="downloadBackupNow()" class="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-100 font-bold text-xs py-2 rounded-xl"><i data-lucide="hard-drive-download" class="ico w-3.5 h-3.5"></i> Scarica ora</button>
+                <label class="flex-1 text-center cursor-pointer bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-100 font-bold text-xs py-2 rounded-xl"><i data-lucide="folder-open" class="ico w-3.5 h-3.5"></i> Ripristina da file
+                    <input type="file" accept=".json,application/json" class="hidden" onchange="restoreBackupFile(event)">
+                </label>
+            </div>
+        </div>
+    </div>
+
     <div id="config-modal" class="fixed inset-0 bg-black/80 hidden items-center justify-center p-4 z-50 backdrop-blur-sm">
         <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-5 space-y-3 shadow-2xl max-h-[90vh] overflow-y-auto">
             <h3 class="text-sm font-bold text-white"><i data-lucide="settings" class="ico w-4 h-4 text-slate-300"></i> Impostazioni Lega (<span id="modal-slot-name"></span>)</h3>
@@ -1132,8 +1152,110 @@
             renderAll();
         }
 
+        // Copie di sicurezza locali (su questo dispositivo): una a ogni salvataggio, tenute le ultime 10
+        const BACKUP_KEY = 'fantasta_backups';
+        function currentSnapshot() {
+            return { leghe, favoritesMap, customValuesMap, playerNotesMap, playerTiersMap, customTiersConfig };
+        }
+        function countPurchases(lg) {
+            let n = 0;
+            Object.values(lg || {}).forEach(l => Object.values((l && l.anni) || {}).forEach(a => {
+                Object.values((a && a.fasi) || {}).forEach(f => { n += ((f || {}).purchases || []).length; });
+            }));
+            return n;
+        }
+        function readBackups() {
+            try { return JSON.parse(localStorage.getItem(BACKUP_KEY) || '[]'); } catch (e) { return []; }
+        }
+        function storeLocalBackup() {
+            try {
+                const data = JSON.stringify(currentSnapshot());
+                let list = readBackups();
+                if (list.length && list[0].data === data) return;
+                list.unshift({ ts: Date.now(), n: countPurchases(leghe), data });
+                list = list.slice(0, 10);
+                while (list.length) {
+                    try { localStorage.setItem(BACKUP_KEY, JSON.stringify(list)); break; }
+                    catch (e) { list.pop(); }
+                }
+            } catch (e) { /* memoria del browser non disponibile */ }
+        }
+        function downloadJson(obj, filename) {
+            const blob = new Blob([JSON.stringify(obj, null, 1)], { type: 'application/json' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        }
+        function backupStamp(ts) {
+            const d = new Date(ts), z = n => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}_${z(d.getHours())}-${z(d.getMinutes())}`;
+        }
+        function downloadBackupNow() {
+            downloadJson({ fantasta_backup: 1, ts: Date.now(), ...currentSnapshot() }, `FantAsta_backup_${backupStamp(Date.now())}.json`);
+        }
+        function applySnapshot(snap) {
+            if (!snap || !snap.leghe) { alert('File di backup non valido.'); return false; }
+            leghe = snap.leghe;
+            favoritesMap = snap.favoritesMap || {};
+            customValuesMap = snap.customValuesMap || {};
+            playerNotesMap = snap.playerNotesMap || {};
+            playerTiersMap = snap.playerTiersMap || {};
+            if (Array.isArray(snap.customTiersConfig)) customTiersConfig = snap.customTiersConfig;
+            resetAssignForm();
+            saveState();
+            return true;
+        }
+        function openBackupModal() {
+            const list = readBackups();
+            const fmt = ts => new Date(ts).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            document.getElementById('backup-list').innerHTML = list.length ? list.map((b, i) => `
+                <div class="flex items-center justify-between gap-2 bg-slate-800/70 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs">
+                    <span><b class="text-white">${fmt(b.ts)}</b> <span class="text-slate-400">· ${b.n} acquisti in totale</span></span>
+                    <span class="flex gap-1">
+                        <button onclick="downloadLocalBackup(${i})" class="px-2 py-0.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-100 font-bold text-[10px]">Scarica</button>
+                        <button onclick="restoreLocalBackup(${i})" class="px-2 py-0.5 rounded-lg bg-amber-700 hover:bg-amber-600 text-white font-bold text-[10px]">Ripristina</button>
+                    </span>
+                </div>`).join('') : '<p class="text-[11px] text-slate-500 italic text-center py-3">Nessuna copia ancora: se ne crea una a ogni acquisto registrato da questo dispositivo.</p>';
+            const m = document.getElementById('backup-modal');
+            m.classList.remove('hidden'); m.classList.add('flex');
+        }
+        function closeBackupModal() {
+            const m = document.getElementById('backup-modal');
+            m.classList.add('hidden'); m.classList.remove('flex');
+        }
+        function downloadLocalBackup(i) {
+            const b = readBackups()[i];
+            if (b) downloadJson({ fantasta_backup: 1, ts: b.ts, ...JSON.parse(b.data) }, `FantAsta_backup_${backupStamp(b.ts)}.json`);
+        }
+        function restoreLocalBackup(i) {
+            const b = readBackups()[i];
+            if (!b) return;
+            if (!confirm(`Ripristinare la copia del ${new Date(b.ts).toLocaleString('it-IT')} (${b.n} acquisti)?\n\nI dati attuali verranno sostituiti anche online. Prima del ripristino viene scaricata una copia della situazione attuale.`)) return;
+            downloadBackupNow();
+            if (applySnapshot(JSON.parse(b.data))) closeBackupModal();
+        }
+        function restoreBackupFile(ev) {
+            const file = ev.target.files[0];
+            ev.target.value = '';
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+                let snap;
+                try { snap = JSON.parse(reader.result); } catch (e) { alert('Il file non è un backup valido.'); return; }
+                if (!snap || !snap.leghe) { alert('Il file non è un backup di FantAsta.'); return; }
+                if (!confirm(`Ripristinare il backup "${file.name}" (${countPurchases(snap.leghe)} acquisti)?\n\nI dati attuali verranno sostituiti anche online. Prima del ripristino viene scaricata una copia della situazione attuale.`)) return;
+                downloadBackupNow();
+                if (applySnapshot(snap)) closeBackupModal();
+            };
+            reader.readAsText(file);
+        }
+
         async function saveState() {
             saveLocalViewState();
+            storeLocalBackup();
             renderAll(); // Aggiorna subito l'interfaccia localmente
             try {
                 if (!_supabase) {
@@ -1770,7 +1892,7 @@
                     <div class="flex-1 min-w-0">
                         <div class="flex items-center gap-2 flex-wrap">
                             <span class="text-lg font-black text-white leading-tight">${escapeHtml(p.name)}</span>
-                            <span class="text-xs text-slate-400">${escapeHtml(p.club)}</span>${roleBadgesHtml(p)}
+                            <span class="text-xs text-slate-400">${escapeHtml(p.club)}</span>${roleBadgesHtml(p)}${availabilityBadgeHtml(p)}${penaltyBadgeHtml(p)}
                             ${stars ? `<span class="text-amber-400 text-xs">${'★'.repeat(stars)}</span>` : ''}
                             ${tierObj ? `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md" style="color:${tierObj.color};background:${tierObj.color}22;border:1px solid ${tierObj.color}55">${escapeHtml(tierObj.name)}</span>` : ''}
                         </div>
@@ -2181,6 +2303,17 @@
             return `<span class="ml-1 text-[9px] font-black px-1.5 py-0.5 rounded ${cls}" title="${escapeHtml(injuryIt(sq.injury))}${sq.return ? ' · rientro ' + fmtReturn(sq.return) : ''}">${label}</span>`;
         }
 
+        // Etichetta "Rigorista": ha già calciato (o segnato) almeno un rigore in campionato secondo i dati reali
+        function penaltyBadgeHtml(lp) {
+            const b = bsdFor(lp);
+            const st = realStatsFor(lp);
+            const hl = st && st !== 'ambiguo' ? st : null;
+            const taken = Math.max(b && b.pens || 0, hl ? hl.pens + hl.pensMissed : 0);
+            if (!taken) return '';
+            const scored = Math.max(b && b.pens || 0, hl ? hl.pens : 0);
+            return `<span class="ml-1 text-[9px] font-black px-1.5 py-0.5 rounded bg-emerald-900/70 text-emerald-200" title="Rigori in campionato: ${scored} segnati su ${Math.max(taken, scored)} calciati">Rigorista</span>`;
+        }
+
         function bsdRowsHtml(lp) {
             const b = bsdFor(lp);
             if (!b) return [];
@@ -2463,7 +2596,7 @@
                 return `<div class="flex items-center gap-2 bg-slate-900/70 rounded-lg px-1.5 py-1">
                     ${playerPhotoHtml(lp2, 'xs')}
                     <span class="font-bold text-white text-[11px] truncate">${escapeHtml(lp2.name)}</span>
-                    ${roleBadgesHtml(lp2)}${availabilityBadgeHtml(lp2)}
+                    ${roleBadgesHtml(lp2)}${availabilityBadgeHtml(lp2)}${penaltyBadgeHtml(lp2)}
                     <span class="text-[10px] text-slate-400 truncate flex-1">${c.why} · Qt ${lineupValue(lp2)}</span>
                     ${ownerBadgeHtml(lp2)}
                     ${free ? `<button type="button" onclick="selectPlayerByIndex(${idx})" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white">Chiama</button>` : ''}
@@ -2768,13 +2901,24 @@
             box.innerHTML = matches.map(i => {
                 const p = listone[i];
                 return `
-                <div onclick="selectPlayerByIndex(${i})"
-                     class="p-2 hover:bg-indigo-600/30 cursor-pointer flex justify-between items-center text-xs transition gap-2">
+                <div onclick="selectPlayerByIndex(${i})" data-idx="${i}"
+                     class="sugg-item p-2 hover:bg-indigo-600/30 cursor-pointer flex justify-between items-center text-xs transition gap-2">
                     <span class="flex items-center gap-2 min-w-0">${playerPhotoHtml(p, 'md')}<span class="font-bold text-white truncate">${escapeHtml(p.name)} <span class="text-slate-400 font-normal">(${escapeHtml(p.club)})</span></span></span>
                     ${roleBadgesHtml(p)}
                 </div>`;
             }).join('');
             box.classList.remove('hidden');
+            highlightSuggestion(0);
+        }
+
+        // Suggerimento evidenziato (frecce su/giù, Invio per sceglierlo)
+        let _suggIdx = 0;
+        function highlightSuggestion(i) {
+            const items = [...document.querySelectorAll('#suggestions-box .sugg-item')];
+            if (!items.length) return;
+            _suggIdx = (i + items.length) % items.length;
+            items.forEach((el, k) => el.classList.toggle('bg-indigo-600/40', k === _suggIdx));
+            items[_suggIdx].scrollIntoView({ block: 'nearest' });
         }
 
         function selectPlayerByIndex(idx) {
@@ -2841,6 +2985,7 @@
 
             resetAssignForm();
             saveState();
+            document.getElementById('input-player').focus();
         }
 
         function deletePurchase(id) {
@@ -3062,7 +3207,7 @@
 
                 return `
                     <tr class="hover:bg-slate-800/50 border-b border-slate-800 transition">
-                        <td class="px-3.5 py-2 font-bold text-white">${escapeHtml(p.name)}${availabilityBadgeHtml(p)}</td>
+                        <td class="px-3.5 py-2 font-bold text-white">${escapeHtml(p.name)}${availabilityBadgeHtml(p)}${penaltyBadgeHtml(p)}</td>
                         <td class="px-3.5 py-2">${roleBadgesHtml(p)}</td>
                         <td class="px-3.5 py-2 text-slate-300">${escapeHtml(p.club)}</td>
                         <td class="px-3.5 py-2">
@@ -3678,9 +3823,59 @@
             const config = getConfig();
             const select = document.getElementById('input-owner');
             const prev = select.value; // non perdere il manager scelto quando arriva un aggiornamento in tempo reale
-            select.innerHTML = config.managers.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+            select.innerHTML = config.managers.map((m, i) => `<option value="${escapeHtml(m)}">${i < 9 ? (i + 1) + ' · ' : ''}${escapeHtml(m)}</option>`).join('');
             if (config.managers.includes(prev)) select.value = prev;
         }
+
+        // Scorciatoie da tastiera per assegnare in fretta:
+        //  /  cerca giocatore · frecce + Invio  sceglie il suggerimento · 1-9  sceglie il manager
+        //  Invio sul manager  passa al prezzo · Invio sul prezzo  conferma · Esc  svuota
+        function focusPlayerSearch() {
+            if (document.getElementById('view-auction').classList.contains('hidden')) switchTab('auction');
+            const inp = document.getElementById('input-player');
+            inp.focus();
+            inp.select();
+        }
+        function focusPrice() {
+            const price = document.getElementById('input-price');
+            price.focus();
+            price.select();
+        }
+        document.addEventListener('keydown', (e) => {
+            const t = e.target;
+            const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+            const modalOpen = [...document.querySelectorAll('.fixed.inset-0')].some(m => !m.classList.contains('hidden'));
+            if (e.key === '/' && !typing && !modalOpen && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                e.preventDefault();
+                focusPlayerSearch();
+                return;
+            }
+            if (!t || !t.id) return;
+            if (t.id === 'input-player') {
+                const box = document.getElementById('suggestions-box');
+                const open = !box.classList.contains('hidden');
+                if (e.key === 'ArrowDown' && open) { e.preventDefault(); highlightSuggestion(_suggIdx + 1); }
+                else if (e.key === 'ArrowUp' && open) { e.preventDefault(); highlightSuggestion(_suggIdx - 1); }
+                else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const items = box.querySelectorAll('.sugg-item');
+                    if (open && items[_suggIdx]) selectPlayerByIndex(parseInt(items[_suggIdx].dataset.idx));
+                    else if (selectedListonePlayer) document.getElementById('input-owner').focus();
+                }
+                else if (e.key === 'Escape') { e.preventDefault(); resetAssignForm(); }
+            } else if (t.id === 'input-owner') {
+                const managers = getConfig().managers;
+                if (/^[1-9]$/.test(e.key) && managers[parseInt(e.key) - 1]) {
+                    e.preventDefault();
+                    t.value = managers[parseInt(e.key) - 1];
+                    renderPlayerSpotlight();
+                    focusPrice();
+                } else if (e.key === 'Enter') { e.preventDefault(); focusPrice(); }
+                else if (e.key === 'Escape') { e.preventDefault(); resetAssignForm(); focusPlayerSearch(); }
+            } else if (t.id === 'input-price' && e.key === 'Escape') {
+                e.preventDefault(); resetAssignForm(); focusPlayerSearch();
+            }
+        });
 
         // Misura l'altezza reale dell'header (che su mobile va su più righe) e sposta di conseguenza
         // il contenuto sotto, così l'header fisso non copre mai nulla, a qualunque larghezza schermo.
