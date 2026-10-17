@@ -2469,9 +2469,45 @@
             if (b.pens) rows.push(`Rigori segnati in campionato: <b class="text-white">${b.pens}</b>`);
             const f = fmFor(lp);
             if (f) rows.push(`Fantamedia stimata <b class="text-white">${f.fm.toFixed(2)}</b> (voto medio stimato ${f.mv.toFixed(2)}) su ${f.pres} ${f.pres === 1 ? 'partita' : 'partite'}${f.g ? ` · ${f.g} gol` : ''}${f.a ? ` · ${f.a} assist` : ''}${f.yc ? ` · ${f.yc} amm.` : ''}${f.rc ? ` · ${f.rc} esp.` : ''}${f.gc && f.isGk ? ` · ${f.gc} gol subiti` : ''}${f.ps ? ` · ${f.ps} rigori parati` : ''}`);
+            if (f && f.formDelta != null) {
+                const d = f.formDelta;
+                const cls = d >= 0.5 ? 'text-emerald-300' : d <= -0.5 ? 'text-red-300' : 'text-slate-300';
+                const word = d >= 0.5 ? 'in crescita' : d <= -0.5 ? 'in calo' : 'stabile';
+                rows.push(`Forma: <b class="${cls}">${word} ${d >= 0.5 ? '↑' : d <= -0.5 ? '↓' : '→'}</b> · FM ultime 3 partite <b class="text-white">${f.formFm.toFixed(2)}</b> (${d >= 0 ? '+' : ''}${d.toFixed(2)} sulla media)`);
+            }
+            const st = realStatsFor(lp);
+            if (f && f.minAvg) {
+                const early = st && st !== 'ambiguo' && st.starts ? ` · da titolare sostituito prima del 70' in <b class="${(st.subOffEarly || 0) / st.starts >= 0.5 ? 'text-amber-300' : 'text-white'}">${st.subOffEarly || 0}/${st.starts}</b> partite` : '';
+                rows.push(`Minutaggio: <b class="text-white">${Math.round(f.minAvg)}'</b> di media a partita${early}`);
+            }
+            if (lp.role === 'POR' || lp.role === 'DIF') {
+                const dfn = teamDefense(lp.club);
+                if (dfn && dfn.played) rows.push(`Porta inviolata ${escapeHtml(lp.club)}: <b class="text-white">${dfn.cs}/${dfn.played}</b> partite · <b class="text-white">${(dfn.ga / dfn.played).toFixed(1).replace('.', ',')}</b> gol subiti a partita`);
+            }
             const cal = nextFixturesHtml(lp.club, 5);
             if (cal) rows.push(`Prossime: ${cal}`);
             return rows;
+        }
+
+        // Gol subiti e partite senza subire gol per squadra (risultati delle partite finite)
+        let _defenseIndex = null;
+        function teamDefense(club) {
+            if (!_realData) return null;
+            if (!_defenseIndex || _defenseIndex.src !== _realData) {
+                const idx = {};
+                Object.values(_realData.matches || {}).forEach(m => {
+                    if (!m.finished || !m.score) return;
+                    const g = String(m.score).split('-').map(x => parseInt(x));
+                    if (g.length !== 2 || g.some(isNaN)) return;
+                    [[m.home, g[1]], [m.away, g[0]]].forEach(([team, ga]) => {
+                        const c = realClubName(team);
+                        const t = (idx[c] = idx[c] || { played: 0, cs: 0, ga: 0 });
+                        t.played++; t.ga += ga; if (!ga) t.cs++;
+                    });
+                });
+                _defenseIndex = { src: _realData, idx };
+            }
+            return _defenseIndex.idx[club] || null;
         }
 
         function normName(s) {
@@ -2520,7 +2556,7 @@
                     (t.bench || []).forEach(p => { const st = get(p, club); st.bench++; if (p.id != null) byId[p.id + '|' + club] = st; });
                 });
             });
-            matches.forEach(([, m]) => {
+            matches.forEach(([mid, m]) => {
                 if (!m.events) return;
                 [m.home, m.away].forEach(n => { const c = realClubName(n); teamEventMatches[c] = (teamEventMatches[c] || 0) + 1; });
                 m.events.forEach(e => {
@@ -2530,6 +2566,7 @@
                     if (type === 'Substitution') {
                         const inc = byId[e.inId + '|' + club];
                         if (actor) { actor.subOff++; if (inc) actor.offFor[inc.key] = (actor.offFor[inc.key] || 0) + 1; }
+                        if (actor && actor.startedIn.has(mid) && (parseInt(e.time) || 0) < 70) actor.subOffEarly = (actor.subOffEarly || 0) + 1;
                         if (inc) { inc.subOn++; if (actor) inc.onFor[actor.key] = (inc.onFor[actor.key] || 0) + 1; }
                     } else if (type === 'Penalty') {
                         if (actor) { actor.pens++; actor.goals++; }
@@ -2924,11 +2961,21 @@
                     const isGk = r.pos === 'G';
                     const bonus = 3 * (r.g || 0) + (r.a || 0) - 0.5 * (r.yc || 0) - (r.rc || 0) - 3 * (r.pm || 0) + 3 * (r.ps || 0) - (isGk ? (r.gc || 0) : 0);
                     e.pres++; e.mvSum += voto; e.fmSum += voto + bonus;
+                    e.minSum = (e.minSum || 0) + r.min;
+                    (e.byRound = e.byRound || []).push({ round: parseInt(ev.round) || 0, fm: voto + bonus });
                     e.g += r.g || 0; e.a += r.a || 0; e.yc += r.yc || 0; e.rc += r.rc || 0; e.ps += r.ps || 0; e.pm += r.pm || 0;
                     if (isGk) e.gc += r.gc || 0;
                 });
             });
-            Object.values(byClub).forEach(list => Object.values(list).forEach(e => { e.mv = e.mvSum / e.pres; e.fm = e.fmSum / e.pres; }));
+            Object.values(byClub).forEach(list => Object.values(list).forEach(e => {
+                e.mv = e.mvSum / e.pres; e.fm = e.fmSum / e.pres; e.minAvg = e.minSum / e.pres;
+                // Forma: media delle ultime 3 partite giocate rispetto alla media stagionale (servono almeno 4 partite)
+                if (e.pres >= 4) {
+                    const last = e.byRound.slice().sort((a, b) => b.round - a.round).slice(0, 3);
+                    e.formFm = last.reduce((a, x) => a + x.fm, 0) / last.length;
+                    e.formDelta = e.formFm - e.fm;
+                }
+            }));
             return { byClub, cache: {} };
         }
         function fmFor(lp) {
@@ -2946,7 +2993,16 @@
             if (!f) return '<span class="text-slate-600">-</span>';
             const cls = f.fm >= 7 ? 'text-emerald-300' : f.fm >= 6.25 ? 'text-amber-200' : 'text-slate-400';
             const few = f.pres < 3;
-            return `<span class="font-mono font-bold ${few ? 'text-slate-500' : cls}" title="Voto medio stimato ${f.mv.toFixed(2)} · ${f.pres} ${f.pres === 1 ? 'partita' : 'partite'}${few ? ' (campione troppo piccolo)' : ''}">${f.fm.toFixed(2)}</span><span class="text-[9px] text-slate-500 ml-0.5">${f.pres}p</span>`;
+            return `<span class="font-mono font-bold ${few ? 'text-slate-500' : cls}" title="Voto medio stimato ${f.mv.toFixed(2)} · ${f.pres} ${f.pres === 1 ? 'partita' : 'partite'}${few ? ' (campione troppo piccolo)' : ''}">${f.fm.toFixed(2)}</span>${formArrowHtml(f)}<span class="text-[9px] text-slate-500 ml-0.5">${f.pres}p</span>`;
+        }
+        // Freccia di forma: ultime 3 partite contro la media stagionale (±0,5 di soglia)
+        function formArrowHtml(f) {
+            if (!f || f.formDelta == null) return '';
+            const d = f.formDelta;
+            const title = `Forma: ${f.formFm.toFixed(2)} nelle ultime 3 partite (${d >= 0 ? '+' : ''}${d.toFixed(2)} sulla media)`;
+            if (d >= 0.5) return `<span class="text-emerald-300 font-black ml-0.5" title="${title}">↑</span>`;
+            if (d <= -0.5) return `<span class="text-red-300 font-black ml-0.5" title="${title}">↓</span>`;
+            return `<span class="text-slate-500 ml-0.5" title="${title}">→</span>`;
         }
 
         // --- Difficoltà calendario: posizione in classifica degli avversari (BSD) ---
