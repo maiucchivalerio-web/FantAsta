@@ -360,6 +360,24 @@
                 </div>
             </div>
 
+            <!-- Doppio ruolo: giocatori liberi che coprono più ruoli scelti (solo Mantra) -->
+            <div id="dual-panel" class="hidden bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-2">
+                <button onclick="togglePanel('dual')" class="w-full flex flex-wrap items-center justify-between gap-2 text-left">
+                    <h2 class="text-sm font-bold text-white flex items-center gap-2"><i data-lucide="git-merge" class="ico w-4 h-4 text-violet-300"></i> Doppio ruolo</h2>
+                    <span class="flex items-center gap-1.5 text-[11px] font-bold text-indigo-300"><span id="dual-toggle-label">Nascondi</span><i data-lucide="chevron-down" id="dual-chevron" class="w-4 h-4 transition-transform" style="transform: rotate(180deg)"></i></span>
+                </button>
+                <div id="dual-body" class="space-y-2">
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <span class="text-[10px] text-slate-400">Ruoli da coprire:</span>
+                        <span id="dual-chips" class="flex flex-wrap gap-1"></span>
+                        <button onclick="dualPickMissing()" class="text-[10px] font-bold px-2 py-1 rounded-lg bg-violet-900/60 hover:bg-violet-800 border border-violet-700/50 text-violet-100" id="dual-missing-btn">Quelli che mi mancano</button>
+                        <button onclick="dualClear()" class="text-[10px] font-bold px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300">Azzera</button>
+                    </div>
+                    <div id="dual-hint" class="text-[10px] text-slate-500"></div>
+                    <div id="dual-results" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-1.5"></div>
+                </div>
+            </div>
+
             <!-- Moduli Mantra coperti da ogni rosa (solo in modalità Mantra) -->
             <div id="mantra-modules-panel" class="hidden bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
                 <!-- Banner cliccabile: apre/chiude la tabella -->
@@ -2116,6 +2134,7 @@
         function setMe(m) {
             try { localStorage.setItem('fantasta_me', m); } catch (e) {}
             renderPlayerSpotlight();
+            renderDualRoles();
         }
         const fm2 = x => x.toFixed(2).replace('.', ',');
         function impactHtml(p) {
@@ -2691,6 +2710,56 @@
             }
             if (st === undefined) return lineupValue(p) >= 10;
             return false;
+        }
+
+        // --- Doppio ruolo: liberi che coprono almeno 2 dei ruoli scelti (tutti, se ne scegli 2) ---
+        let _dualRoles = [];
+        try { _dualRoles = JSON.parse(localStorage.getItem('fantasta_dual_roles') || '[]'); } catch (e) {}
+        function saveDualRoles() { try { localStorage.setItem('fantasta_dual_roles', JSON.stringify(_dualRoles)); } catch (e) {} }
+        function toggleDualRole(r) {
+            _dualRoles = _dualRoles.includes(r) ? _dualRoles.filter(x => x !== r) : [..._dualRoles, r];
+            saveDualRoles(); renderDualRoles();
+        }
+        function dualClear() { _dualRoles = []; saveDualRoles(); renderDualRoles(); }
+        // Ruoli che non ha ancora nessun giocatore della mia rosa (portiere escluso: non ha doppi ruoli)
+        function dualPickMissing() {
+            const cov = getTeamStats(getMe()).mantraCoverage;
+            _dualRoles = MANTRA_ROLES.filter(r => r !== 'Por' && !cov[r]);
+            saveDualRoles(); renderDualRoles();
+        }
+        function renderDualRoles() {
+            const panel = document.getElementById('dual-panel');
+            if (!isMantra() || !getListone().length) { panel.classList.add('hidden'); return; }
+            panel.classList.remove('hidden');
+            document.getElementById('dual-missing-btn').innerText = `Quelli che mancano a ${getMe()}`;
+            document.getElementById('dual-chips').innerHTML = MANTRA_ROLES.filter(r => r !== 'Por').map(r =>
+                `<button onclick="toggleDualRole('${r}')" class="mr-chip mr-${r} ${_dualRoles.includes(r) ? 'ring-2 ring-white' : 'opacity-40'}" title="${MANTRA_ROLE_NAMES[r]}">${r}</button>`).join('');
+            const hint = document.getElementById('dual-hint');
+            const box = document.getElementById('dual-results');
+            if (_dualRoles.length < 2) {
+                hint.innerText = 'Scegli almeno 2 ruoli (o usa "Quelli che mi mancano"): vedrai i giocatori liberi che ne coprono più di uno.';
+                box.innerHTML = '';
+                return;
+            }
+            const listone = getListone();
+            const res = getAvailableListone().map(p => ({ p, hit: (p.mantraRoles || []).filter(r => _dualRoles.includes(r)) }))
+                .filter(x => x.hit.length >= 2)
+                .sort((a, b) => lineupValue(b.p) - lineupValue(a.p) || fmValue(b.p) - fmValue(a.p));
+            hint.innerText = res.length
+                ? `${res.length} liberi coprono almeno 2 di questi ruoli${res.length > 12 ? ' · i 12 con la quotazione più alta' : ''}`
+                : 'Nessun giocatore libero copre almeno 2 di questi ruoli.';
+            box.innerHTML = res.slice(0, 12).map(({ p, hit }) => {
+                const f = fmFor(p);
+                return `<div class="flex items-center gap-1.5 bg-slate-800/70 border border-slate-700/60 rounded-xl px-2 py-1.5 text-xs">
+                    ${playerPhotoHtml(p, 'xs')}
+                    <div class="min-w-0 flex-1">
+                        <div class="font-bold text-white truncate">${escapeHtml(p.name)} <span class="text-slate-400 font-normal">${escapeHtml(p.club)}</span>${availabilityBadgeHtml(p)}</div>
+                        <div class="flex items-center gap-0.5 flex-wrap">${(p.mantraRoles || []).map(r => `<span class="mr-chip mr-${r} ${hit.includes(r) ? 'ring-1 ring-white' : 'opacity-40'}">${r}</span>`).join('')}
+                            <span class="text-[10px] text-slate-400 ml-1">FM ${f ? f.fm.toFixed(2) : '-'} · Qt ${p.qtM || p.qt || '-'}</span></div>
+                    </div>
+                    <button onclick="selectPlayerByIndex(${listone.indexOf(p)}); document.getElementById('view-auction').scrollIntoView({ behavior: 'smooth' })" class="text-[10px] font-bold px-2 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white">Chiama</button>
+                </div>`;
+            }).join('');
         }
 
         function renderScarcity() {
@@ -3992,6 +4061,7 @@
             renderSelectedRoleField();
             renderTeamsOverview();
             renderScarcity();
+            renderDualRoles();
             renderMantraModules();
             if (!document.getElementById('lineup-modal').classList.contains('hidden')) renderLineupModal();
             renderLiveHistory();
@@ -4096,7 +4166,7 @@
         // Avvio all'apertura della pagina caricando i dati da Supabase
         window.onload = () => {
             refreshIcons();
-            ['teams', 'scarcity'].forEach(applyPanelState);
+            ['teams', 'scarcity', 'dual'].forEach(applyPanelState);
             loadRealData();
             applyLocalViewState();
             loadDataFromSupabase();
