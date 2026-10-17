@@ -2263,9 +2263,10 @@
                         const inc = byId[e.inId + '|' + club];
                         if (actor) { actor.subOff++; if (inc) actor.offFor[inc.key] = (actor.offFor[inc.key] || 0) + 1; }
                         if (inc) { inc.subOn++; if (actor) inc.onFor[actor.key] = (inc.onFor[actor.key] || 0) + 1; }
-                    } else if (/penalty/i.test(type)) {
-                        if (actor) { if (/miss/i.test(type)) actor.pensMissed++; else actor.pens++; }
-                        if (actor && /goal/i.test(type)) actor.goals++;
+                    } else if (type === 'Penalty') {
+                        if (actor) { actor.pens++; actor.goals++; }
+                    } else if (type === 'Missed Penalty') {
+                        if (actor) actor.pensMissed++;
                     } else if (type === 'Goal' && actor) {
                         actor.goals++;
                     }
