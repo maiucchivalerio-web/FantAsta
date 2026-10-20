@@ -570,7 +570,7 @@
                         </label>
                     </div>
                 </div>
-                <p class="text-[11px] text-slate-400">Scambi 1 contro 1 e multipli (2x1, 3x1, 1x2, 2x2) valutati sulla <b>formazione migliore</b> (fantamedia stimata, modulo Mantra più adatto) e sulle <b>riserve per ruolo</b> di entrambe le squadre. Mai sotto i 2 portieri, rose entro il massimo, esclusi gli scambi troppo sbilanciati di quotazione. La fantamedia è stimata su poche giornate: è un'indicazione, non una certezza.</p>
+                <p class="text-[11px] text-slate-400">Scambi 1 contro 1 e multipli (2x1, 3x1, 1x2, 2x2) valutati sulla <b>formazione migliore</b> (valore = metà fantamedia stimata e metà quotazione, modulo Mantra più adatto) e sulle <b>riserve per ruolo</b> di entrambe le squadre. Mai sotto i 2 portieri, rose entro il massimo, esclusi gli scambi troppo sbilanciati di quotazione. La fantamedia è stimata su poche giornate: è un'indicazione, non una certezza.</p>
                 <div id="trades-summary" class="text-[11px] text-slate-300"></div>
             </div>
             <div id="trades-pieces" class="grid lg:grid-cols-2 gap-4"></div>
@@ -2154,10 +2154,15 @@
             const w = Math.min(f.pres, 3) / 3;
             return f.fm * w + 6 * (1 - w);
         }
-        // Formazione migliore fra tutti i moduli: prima più posizioni coperte, poi fantamedia più alta
+        // Valore di un giocatore per la formazione: metà fantamedia stimata, metà quotazione (Qt 30 ≈ 8,5; Qt 1 ≈ 5,6),
+        // così un giocatore forte partito piano non viene sottovalutato per poche partite
+        function playerStrength(p) {
+            return 0.5 * fmValue(p) + 0.5 * (5.5 + lineupValue(p) / 10);
+        }
+        // Formazione migliore fra tutti i moduli: prima più posizioni coperte, poi valore più alto
         function bestFmLineup(players) {
             const team = players.filter(p => p.mantraRoles && p.mantraRoles.length);
-            const vals = new Map(team.map(p => [p, fmValue(p)]));
+            const vals = new Map(team.map(p => [p, playerStrength(p)]));
             const val = p => vals.get(p);
             let best = null;
             Object.entries(MANTRA_MODULES).forEach(([mod, slots]) => {
@@ -2225,7 +2230,7 @@
                 const modTxt = before && before.covered && before.mod !== after.mod ? ` · passi dal <b>${before.mod}</b> al <b>${after.mod}</b>` : ` nel <b>${after.mod}</b>`;
                 const filled = after.covered > (before ? before.covered : 0);
                 const outTxt = out.length ? ` al posto di <b class="text-amber-200">${out.map(o => escapeHtml(o.player)).join(', ')}</b>` : (filled ? ' su una posizione scoperta' : '');
-                msg = `<span class="text-slate-200">Titolare come <b class="text-white">${after.slots[si]}</b>${modTxt}${outTxt}.</span> ${out.length || !filled ? `<b class="${delta > 0.05 ? 'text-emerald-300' : 'text-slate-400'}">${delta >= 0 ? '+' : ''}${fm2(delta)}</b> <span class="text-slate-400">di fantamedia alla formazione</span>` : `<span class="text-slate-400">Posizioni coperte: ${after.covered}/11</span>`}`;
+                msg = `<span class="text-slate-200">Titolare come <b class="text-white">${after.slots[si]}</b>${modTxt}${outTxt}.</span> ${out.length || !filled ? `<b class="${delta > 0.05 ? 'text-emerald-300' : 'text-slate-400'}">${delta >= 0 ? '+' : ''}${fm2(delta)}</b> <span class="text-slate-400">di valore alla formazione (metà FM stimata, metà quotazione)</span>` : `<span class="text-slate-400">Posizioni coperte: ${after.covered}/11</span>`}`;
             }
             // Riserve: questo acquisto copre una posizione che oggi non ha riserva?
             const gapsBefore = team.length ? benchGaps(team).gaps : [];
@@ -2265,10 +2270,20 @@
         // Quanti giocatori di ogni ruolo possono servire al massimo in un modulo (es. Pc: 2)
         const ROLE_DEMAND = Object.fromEntries(MANTRA_ROLES.map(r => [r, Math.max(...Object.values(MANTRA_MODULES).map(ms => ms.filter(sl => sl.split('/').includes(r)).length))]));
         // Ruoli in esubero: più giocatori di quanti ne servono nel modulo più esigente, più una riserva
+        // Per ogni ruolo si tengono i migliori (quanti ne servono + 1 riserva); è esubero solo chi, in TUTTI i suoi ruoli,
+        // viene dopo questi. I ruoli "pieni" sono quelli con più giocatori del necessario.
         function surplusRoles(team) {
-            const cnt = {};
-            team.forEach(p => (p.mantraRoles || []).forEach(r => cnt[r] = (cnt[r] || 0) + 1));
-            return { cnt, surplus: new Set(MANTRA_ROLES.filter(r => r !== 'Por' && (cnt[r] || 0) > ROLE_DEMAND[r] + 1)) };
+            const cnt = {}, kept = {}, rank = new Map();
+            MANTRA_ROLES.filter(r => r !== 'Por').forEach(r => {
+                const list = team.filter(p => (p.mantraRoles || []).includes(r)).sort((a, b) => playerStrength(b) - playerStrength(a));
+                cnt[r] = list.length;
+                kept[r] = list.slice(0, ROLE_DEMAND[r] + 1);
+                list.forEach((p, i) => { if (!rank.has(p)) rank.set(p, {}); rank.get(p)[r] = i + 1; });
+            });
+            const surplus = new Set(MANTRA_ROLES.filter(r => r !== 'Por' && cnt[r] > ROLE_DEMAND[r] + 1));
+            const esuberi = new Set(team.filter(p => !(p.mantraRoles || []).includes('Por') && (p.mantraRoles || []).length &&
+                p.mantraRoles.every(r => surplus.has(r) && !kept[r].includes(p))));
+            return { cnt, kept, rank, surplus, esuberi };
         }
         function combos(arr, k) {
             const out = [];
@@ -2334,14 +2349,14 @@
                 const g = benchGaps(mine.filter(x => x !== p)).gaps.filter(x => !gaps.includes(x));
                 if (g.length) why.set(p, 'unica riserva ' + g.join(', '));
             });
-            const { cnt: roleCnt, surplus } = surplusRoles(mine);
-            const isSurplusP = p => p.mantraRoles.some(r => surplus.has(r));
+            const { cnt: roleCnt, surplus, esuberi, rank, kept } = surplusRoles(mine);
+            const isSurplusP = p => esuberi.has(p);
             // Pedine: prima chi ha un ruolo in esubero, poi per quotazione
             const pieces = mine.filter(p => !why.has(p)).sort((a, b) => (isSurplusP(b) - isSurplusP(a)) || lineupValue(b) - lineupValue(a));
             const xiWeak = [...xi].filter(p => !isGkP(p)).sort((a, b) => fmValue(a) - fmValue(b));
             const roles = new Set(mine.flatMap(p => p.mantraRoles));
             const cfg = { max: getTotalSlots(), min: getMinSlots() };
-            return { me, mine, base, gaps, xi, why, pieces, xiWeak, roles, cfg, roleCnt, surplus, isSurplusP, wantedAll: [] };
+            return { me, mine, base, gaps, xi, why, pieces, xiWeak, roles, cfg, roleCnt, surplus, isSurplusP, rank, kept, wantedAll: [] };
         }
 
         function tradesWith(ctx, other) {
@@ -2350,7 +2365,8 @@
             const thBase = bestFmLineup(theirs);
             // Chi mi servirebbe davvero: entra nella mia formazione migliore (o porta un ruolo che non ho)
             const onlySurplus = b => b.mantraRoles.every(r => ctx.surplus.has(r));
-            const wanted = theirs.filter(b => !onlySurplus(b)).map(b => {
+            const upgradeOfKept = b => b.mantraRoles.some(r => ctx.kept[r] && playerStrength(b) > playerStrength(ctx.kept[r][ctx.kept[r].length - 1]));
+            const wanted = theirs.filter(b => !onlySurplus(b) || upgradeOfKept(b)).map(b => {
                 const t = bestFmLineup([...ctx.mine, b]);
                 const enters = t.assign.includes(t.team.length - 1);
                 const newRole = b.mantraRoles.some(r => !ctx.roles.has(r));
@@ -2369,6 +2385,8 @@
                 const qGet = sumQ(get);
                 giveSets.forEach(give => {
                     if (!allowed(give.length, get.length)) return;
+                    // Un giocatore di soli ruoli già pieni arriva solo se ne cedi uno con lo stesso ruolo
+                    if (get.some(b => onlySurplus(b) && !give.some(a => a.mantraRoles.some(r => b.mantraRoles.includes(r))))) return;
                     const qGive = sumQ(give);
                     if (Math.abs(qGive - qGet) > 4 && Math.min(qGive, qGet) / Math.max(qGive, qGet) < 0.65) return;
                     // Portieri: nessuno dei due scende sotto il minimo
@@ -2391,7 +2409,7 @@
                         newRoles: [...new Set(get.flatMap(p => p.mantraRoles))].filter(r => !ctx.roles.has(r)),
                         lostRoles: [...new Set(give.flatMap(p => p.mantraRoles))].filter(r => !myTeam.some(x => x.mantraRoles.includes(r))),
                         size: give.length + get.length,
-                        surplusOut: give.filter(ctx.isSurplusP).flatMap(p => p.mantraRoles.filter(r => ctx.surplus.has(r)))
+                        surplusOut: give.filter(ctx.isSurplusP).flatMap(p => p.mantraRoles)
                     });
                 });
             });
@@ -2425,7 +2443,7 @@
             const kind = (document.getElementById('trades-kind') || {}).value || 'all';
             const R = _tradesCache.results.filter(r => r.fixedGaps && (kind === 'all' || (kind === '1' ? r.size === 2 : r.size > 2)));
             const summary = document.getElementById('trades-summary');
-            summary.innerHTML = `La tua formazione migliore: <b class="text-white">${ctx.base.mod}</b> · ${ctx.base.covered}/11 posizioni · fantamedia stimata totale <b class="text-white">${fm2(ctx.base.total)}</b>${ctx.gaps.length ? ` · senza riserva: <b class="text-red-300">${ctx.gaps.join(', ')}</b>` : ' · panchina coperta'}${ctx.surplus.size ? ` · ruoli in esubero: <b class="text-amber-300">${[...ctx.surplus].map(r => `${r} (${ctx.roleCnt[r]}, ne servono al massimo ${ROLE_DEMAND[r]} + 1 riserva)`).join(', ')}</b> → non ti propongo altri giocatori solo di questi ruoli` : ''}`;
+            summary.innerHTML = `La tua formazione migliore: <b class="text-white">${ctx.base.mod}</b> · ${ctx.base.covered}/11 posizioni · valore totale <b class="text-white">${fm2(ctx.base.total)}</b> <span class="text-slate-500">(metà FM stimata, metà quotazione)</span>${ctx.gaps.length ? ` · senza riserva: <b class="text-red-300">${ctx.gaps.join(', ')}</b>` : ' · panchina coperta'}${ctx.surplus.size ? ` · ruoli pieni: <b class="text-amber-300">${[...ctx.surplus].map(r => `${r} (${ctx.roleCnt[r]}, ne servono al massimo ${ROLE_DEMAND[r]} + 1 riserva)`).join(', ')}</b> → in questi ruoli tieni i migliori, gli altri sono esuberi` : ''}`;
 
             // Pedine di scambio e giocatori che ti servirebbero
             const mini = (p, extra) => {
@@ -2441,7 +2459,7 @@
             document.getElementById('trades-pieces').innerHTML = `
                 <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-2">
                     <h3 class="text-sm font-bold text-white flex items-center gap-2"><i data-lucide="repeat" class="ico w-4 h-4 text-amber-300"></i> Le tue pedine di scambio <span class="text-[11px] font-normal text-slate-400">fuori dalla formazione migliore e non indispensabili come riserva</span></h3>
-                    <div class="grid sm:grid-cols-2 gap-1">${ctx.pieces.map(p => mini(p, ctx.isSurplusP(p) ? '<span class="text-amber-300">esubero</span>' : '')).join('') || '<p class="text-[11px] text-slate-500 italic">Nessuna: ogni giocatore ti serve.</p>'}</div>
+                    <div class="grid sm:grid-cols-2 gap-1">${ctx.pieces.map(p => mini(p, ctx.isSurplusP(p) ? `<span class="text-amber-300" title="Per valore è ${p.mantraRoles.map(r => ctx.rank.get(p)[r] + '° ' + r).join(', ')}: nei suoi ruoli hai già abbastanza giocatori migliori">esubero (${p.mantraRoles.map(r => ctx.rank.get(p)[r] + '° ' + r).join(', ')})</span>` : '')).join('') || '<p class="text-[11px] text-slate-500 italic">Nessuna: ogni giocatore ti serve.</p>'}</div>
                     ${keep.length ? `<div class="text-[10px] text-slate-400 pt-1">Da tenere (non titolari ma necessari): ${keep.map(p => `<b class="text-slate-200">${escapeHtml(p.player)}</b> (${ctx.why.get(p)})`).join(', ')}</div>` : ''}
                 </div>
                 <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-2">
@@ -2471,7 +2489,7 @@
             const chip = (txt, cls) => `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md ${cls}">${txt}</span>`;
             const sign = d => (d >= 0 ? '+' : '') + fm2(d);
             // Se cambia il numero di posizioni coperte, la differenza di fantamedia non è confrontabile: si mostra quella
-            const effect = (cov, d) => cov ? `${cov > 0 ? '+' : ''}${cov} posizion${Math.abs(cov) === 1 ? 'e' : 'i'} in formazione` : `${sign(d)} FM formazione`;
+            const effect = (cov, d) => cov ? `${cov > 0 ? '+' : ''}${cov} posizion${Math.abs(cov) === 1 ? 'e' : 'i'} in formazione` : `${sign(d)} valore formazione`;
             const plRow = p => {
                 const f = fmFor(listoneOfPurchase(p) || p);
                 const tag = ctx.why.get(p);
