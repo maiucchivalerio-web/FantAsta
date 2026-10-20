@@ -651,9 +651,16 @@
 
             <div id="cfg-mantra-fields" class="border-t border-slate-800 pt-2.5 space-y-2 hidden">
                 <label class="block text-xs font-bold text-indigo-400 uppercase tracking-wider">Rosa Mantra</label>
-                <div>
-                    <label class="block text-[11px] text-slate-300 mb-1">Giocatori totali per rosa (nessun vincolo per ruolo)</label>
-                    <input type="number" id="cfg-roster-size" min="1" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1 text-white font-mono text-xs">
+                <p class="text-[10px] text-slate-500">Nessun vincolo per ruolo. Con minimo e massimo diversi la rosa è a numero variabile: i crediti vengono tenuti da parte solo per arrivare al minimo.</p>
+                <div class="grid grid-cols-2 gap-2.5">
+                    <div>
+                        <label class="block text-[11px] text-slate-300 mb-1">Minimo giocatori per rosa</label>
+                        <input type="number" id="cfg-roster-min" min="1" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1 text-white font-mono text-xs">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] text-slate-300 mb-1">Massimo giocatori per rosa</label>
+                        <input type="number" id="cfg-roster-size" min="1" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1 text-white font-mono text-xs">
+                    </div>
                 </div>
             </div>
 
@@ -861,6 +868,17 @@
         function isMantra() { return getConfig().mode === 'mantra'; }
 
         // Numero totale di giocatori in rosa: in Mantra è un numero unico (nessun vincolo per ruolo), in Classic la somma degli slot
+        // Minimo di giocatori per rosa: in Mantra può essere più basso del massimo (rosa a numero variabile)
+        function getMinSlots() {
+            const max = getTotalSlots();
+            if (!isMantra()) return max;
+            const min = getConfig().rosterMin;
+            return min && min < max ? min : max;
+        }
+        function rosaLabel(stats) {
+            return `${stats.totalPlayers}/${stats.totalSlots}${stats.minSlots < stats.totalSlots ? ` <span class="text-slate-500 font-normal">(min ${stats.minSlots})</span>` : ''}`;
+        }
+
         function getTotalSlots() {
             const config = getConfig();
             if (isMantra()) return config.rosterSize || DEFAULT_MANTRA_ROSTER_SIZE;
@@ -3234,7 +3252,7 @@
                 }
             }
             if (price > stats.maxBid) {
-                alert(`❌ ${owner} può spendere al massimo ${stats.maxBid}€ per questo giocatore (residuo ${stats.remaining}€, ${stats.remainingSlots} posti ancora da riempire a 1€ minimo).`);
+                alert(`❌ ${owner} può spendere al massimo ${stats.maxBid}€ per questo giocatore (residuo ${stats.remaining}€, ${stats.slotsToMin} giocatori ancora da prendere per arrivare al minimo di ${stats.minSlots}, a 1€ l'uno).`);
                 return;
             }
 
@@ -3689,9 +3707,11 @@
             const remaining = config.initialBudget - spent;
 
             const totalSlots = getTotalSlots();
+            const minSlots = getMinSlots();
             const remainingSlots = Math.max(0, totalSlots - teamP.length);
-
-            const maxBid = Math.max(0, remaining - (remainingSlots > 0 ? remainingSlots - 1 : 0));
+            // Crediti da tenere da parte: 1€ per ogni giocatore che manca per arrivare al minimo (escluso quello all'asta)
+            const slotsToMin = Math.max(0, minSlots - teamP.length);
+            const maxBid = remainingSlots > 0 ? Math.max(0, remaining - (slotsToMin > 0 ? slotsToMin - 1 : 0)) : 0;
 
             const rolesCount = { POR: 0, DIF: 0, CEN: 0, ATT: 0 };
             teamP.forEach(p => rolesCount[p.role] = (rolesCount[p.role] || 0) + 1);
@@ -3701,7 +3721,7 @@
             MANTRA_ROLES.forEach(r => mantraCoverage[r] = 0);
             teamP.forEach(p => (p.mantraRoles || []).forEach(r => { if (mantraCoverage[r] !== undefined) mantraCoverage[r]++; }));
 
-            return { spent, remaining, totalPlayers: teamP.length, totalSlots, remainingSlots, maxBid, rolesCount, mantraCoverage, purchases: teamP };
+            return { spent, remaining, totalPlayers: teamP.length, totalSlots, minSlots, slotsToMin, remainingSlots, maxBid, rolesCount, mantraCoverage, purchases: teamP };
         }
 
         function renderTeamsOverview() {
@@ -3751,7 +3771,7 @@
                                 <div class="font-bold text-white text-xs truncate" title="${m}">${m}</div>
                             </div>
                             ${isMantra() ? `
-                            <div class="text-[10px] text-slate-400 mb-1 flex justify-between gap-1"><span>Rosa: <strong class="text-indigo-300 font-mono">${stats.totalPlayers}/${stats.totalSlots}</strong></span><button onclick="openLineupModal(${config.managers.indexOf(m)})" class="hover:underline inline-flex items-center gap-0.5" title="Moduli Mantra già schierabili — clicca per il campetto"><i data-lucide="puzzle" class="ico w-3 h-3 text-emerald-300"></i> <strong class="text-emerald-300 font-mono">${Object.values(moduleCoverage(stats.purchases)).filter(m => !m.length).length}/${Object.keys(MANTRA_MODULES).length}</strong></button></div>
+                            <div class="text-[10px] text-slate-400 mb-1 flex justify-between gap-1"><span>Rosa: <strong class="text-indigo-300 font-mono">${rosaLabel(stats)}</strong></span><button onclick="openLineupModal(${config.managers.indexOf(m)})" class="hover:underline inline-flex items-center gap-0.5" title="Moduli Mantra già schierabili — clicca per il campetto"><i data-lucide="puzzle" class="ico w-3 h-3 text-emerald-300"></i> <strong class="text-emerald-300 font-mono">${Object.values(moduleCoverage(stats.purchases)).filter(m => !m.length).length}/${Object.keys(MANTRA_MODULES).length}</strong></button></div>
                             <div class="flex items-center gap-0.5 mb-1 flex-wrap" title="Giocatori in rosa che possono coprire ciascun ruolo">
                                 ${MANTRA_ROLES.map(r => `<span class="mr-chip mr-${r} ${stats.mantraCoverage[r] ? '' : 'mr-zero'}" title="${MANTRA_ROLE_NAMES[r]}">${r}:${stats.mantraCoverage[r]}</span>`).join('')}
                             </div>
@@ -3945,7 +3965,7 @@
                 return `
                     <div class="bg-slate-800/80 p-3.5 rounded-xl border border-slate-700 space-y-1.5">
                         <div class="flex justify-between font-bold text-white text-xs"><span>${m}</span><span class="font-mono text-emerald-400">${stats.remaining} €</span></div>
-                        <div class="text-xs text-slate-400 flex justify-between"><span>Rosa: <strong>${stats.totalPlayers}/${stats.totalSlots}</strong></span><span>Rilancio Max: <strong class="text-amber-400 font-mono">${stats.maxBid} €</strong></span></div>
+                        <div class="text-xs text-slate-400 flex justify-between"><span>Rosa: <strong>${rosaLabel(stats)}</strong></span><span>Rilancio Max: <strong class="text-amber-400 font-mono">${stats.maxBid} €</strong></span></div>
                     </div>
                 `;
             }).join('');
@@ -3964,6 +3984,7 @@
             document.getElementById('cfg-managers').value = config.managers.join(', ');
             document.getElementById('cfg-mode').value = config.mode === 'mantra' ? 'mantra' : 'classic';
             document.getElementById('cfg-roster-size').value = config.rosterSize || DEFAULT_MANTRA_ROSTER_SIZE;
+            document.getElementById('cfg-roster-min').value = config.rosterMin || config.rosterSize || DEFAULT_MANTRA_ROSTER_SIZE;
             document.getElementById('cfg-photo-url').value = getPhotoTemplate();
             document.getElementById('cfg-slot-por').value = config.slots.POR;
             document.getElementById('cfg-slot-dif').value = config.slots.DIF;
@@ -3983,6 +4004,7 @@
             config.managers = document.getElementById('cfg-managers').value.split(',').map(m => m.trim()).filter(Boolean);
             config.mode = document.getElementById('cfg-mode').value === 'mantra' ? 'mantra' : 'classic';
             config.rosterSize = parseInt(document.getElementById('cfg-roster-size').value) || DEFAULT_MANTRA_ROSTER_SIZE;
+            config.rosterMin = Math.min(parseInt(document.getElementById('cfg-roster-min').value) || config.rosterSize, config.rosterSize);
             config.photoUrlTemplate = document.getElementById('cfg-photo-url').value.trim();
             config.slots = {
                 POR: parseInt(document.getElementById('cfg-slot-por').value) || 3,
