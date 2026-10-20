@@ -202,7 +202,7 @@
                     </summary>
                     <div class="absolute right-0 mt-1.5 w-60 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-1 z-50">
                         <button onclick="closeExportMenu(); exportToCSV()" class="menu-item"><i data-lucide="table" class="w-4 h-4 text-emerald-400"></i><span><b>Rose complete</b><br><span class="text-[10px] text-slate-400">CSV per Excel con riepilogo crediti</span></span></button>
-                        <button onclick="closeExportMenu(); exportForLegheFantacalcio()" class="menu-item"><i data-lucide="upload" class="w-4 h-4 text-teal-400"></i><span><b>Per Leghe Fantacalcio</b><br><span class="text-[10px] text-slate-400">File per "Importa rose": squadra,id,costo</span></span></button>
+                        <button onclick="closeExportMenu(); openLegheExportModal()" class="menu-item"><i data-lucide="upload" class="w-4 h-4 text-teal-400"></i><span><b>Per Leghe Fantacalcio</b><br><span class="text-[10px] text-slate-400">File per "Importa rose": squadra,id,costo</span></span></button>
                         <button onclick="closeExportMenu(); downloadBackupNow()" class="menu-item"><i data-lucide="hard-drive-download" class="w-4 h-4 text-amber-400"></i><span><b>Backup completo</b><br><span class="text-[10px] text-slate-400">Tutti i dati in un file, ripristinabile</span></span></button>
                         <button onclick="closeExportMenu(); openBackupModal()" class="menu-item"><i data-lucide="history" class="w-4 h-4 text-sky-400"></i><span><b>Copie di sicurezza</b><br><span class="text-[10px] text-slate-400">Ultime copie automatiche e ripristino</span></span></button>
                     </div>
@@ -606,6 +606,18 @@
     </div>
 
     <!-- Modal Configurazione Lega -->
+    <div id="leghe-export-modal" class="fixed inset-0 bg-black/80 hidden items-center justify-center p-4 z-50 backdrop-blur-sm" onclick="if (event.target === this) closeLegheExportModal()">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-5 space-y-3 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center">
+                <h3 class="text-sm font-bold text-white flex items-center gap-1.5"><i data-lucide="upload" class="ico w-4 h-4 text-teal-300"></i> Esporta per Leghe Fantacalcio</h3>
+                <button onclick="closeLegheExportModal()" class="text-slate-400 hover:text-white text-lg leading-none">×</button>
+            </div>
+            <p class="text-[11px] text-slate-400">Un file per squadra nel formato <b>squadra,id,costo</b>. Su Leghe: Gestione Rose → Importa rose, scegli la squadra e carica il suo file.</p>
+            <div id="leghe-export-list" class="grid gap-1.5"></div>
+            <button onclick="exportForLegheFantacalcio()" class="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 font-bold text-[11px] py-1.5 rounded-xl">Oppure tutte le squadre in un unico file</button>
+        </div>
+    </div>
+
     <div id="backup-modal" class="fixed inset-0 bg-black/80 hidden items-center justify-center p-4 z-50 backdrop-blur-sm" onclick="if (event.target === this) closeBackupModal()">
         <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-5 space-y-3 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center">
@@ -4087,9 +4099,26 @@
         // ogni piattaforma non è documentato pubblicamente: verifica le prime righe prima di caricarlo.
         // Formato richiesto da Leghe Fantacalcio (Gestione Rose > Importa rose):
         // una riga per calciatore "squadra,id,costo", senza intestazione, separata da virgole
-        function exportForLegheFantacalcio() {
+        // Finestra per scegliere la squadra da esportare (Leghe importa una rosa alla volta)
+        function openLegheExportModal() {
             const purchases = getEffectivePurchases();
-            if (purchases.length === 0) { alert("Nessun acquisto da esportare in questa fase."); return; }
+            const managers = getConfig().managers;
+            document.getElementById('leghe-export-list').innerHTML = managers.map((m, i) => {
+                const n = purchases.filter(p => p.owner === m).length;
+                return `<button onclick="exportForLegheFantacalcio(getConfig().managers[${i}])" ${n ? '' : 'disabled'} class="flex items-center justify-between gap-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 border border-slate-700 rounded-xl px-3 py-2 text-xs text-left">
+                    <span class="font-bold text-white">${escapeHtml(m)}</span><span class="text-slate-400">${n} giocatori <i data-lucide="download" class="ico w-3.5 h-3.5 text-teal-300"></i></span></button>`;
+            }).join('');
+            const modal = document.getElementById('leghe-export-modal');
+            modal.classList.remove('hidden'); modal.classList.add('flex');
+        }
+        function closeLegheExportModal() {
+            const modal = document.getElementById('leghe-export-modal');
+            modal.classList.add('hidden'); modal.classList.remove('flex');
+        }
+
+        function exportForLegheFantacalcio(onlyOwner) {
+            const purchases = getEffectivePurchases().filter(p => !onlyOwner || p.owner === onlyOwner);
+            if (purchases.length === 0) { alert("Nessun acquisto da esportare."); return; }
             const managers = getConfig().managers;
             const sorted = purchases.slice().sort((a, b) => managers.indexOf(a.owner) - managers.indexOf(b.owner));
             const missing = [];
@@ -4103,7 +4132,7 @@
             const blob = new Blob([lines.join('\r\n') + '\r\n'], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
-            link.download = `${exportFileBase()}_per-LegheFC.csv`;
+            link.download = `${exportFileBase()}_per-LegheFC${onlyOwner ? '_' + String(onlyOwner).replace(/[^\w-]+/g, '_') : ''}.csv`;
             document.body.appendChild(link);
             link.click();
             link.remove();
