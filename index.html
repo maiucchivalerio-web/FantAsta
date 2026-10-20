@@ -559,13 +559,21 @@
             <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-2">
                 <div class="flex flex-wrap items-center justify-between gap-2">
                     <h2 class="text-sm font-bold text-white flex items-center gap-2"><i data-lucide="arrow-left-right" class="ico w-4 h-4 text-emerald-300"></i> Scambi consigliati</h2>
-                    <label class="text-[11px] text-slate-400 flex items-center gap-1.5">Io sono
-                        <select id="trades-me" onchange="setMe(this.value)" class="bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1 text-xs text-white font-bold"></select>
-                    </label>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <select id="trades-kind" onchange="drawTradesFromCache()" class="bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1 text-xs text-white font-bold" title="Tipo di scambio">
+                            <option value="all">Tutti gli scambi</option>
+                            <option value="1">Solo 1 contro 1</option>
+                            <option value="multi">Solo scambi multipli</option>
+                        </select>
+                        <label class="text-[11px] text-slate-400 flex items-center gap-1.5">Io sono
+                            <select id="trades-me" onchange="setMe(this.value)" class="bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1 text-xs text-white font-bold"></select>
+                        </label>
+                    </div>
                 </div>
-                <p class="text-[11px] text-slate-400">Scambi uno contro uno con gli altri partecipanti, valutati sulla <b>formazione migliore</b> (fantamedia stimata, modulo Mantra più adatto) e sulle <b>riserve per ruolo</b> di entrambe le squadre. Esclusi gli scambi troppo sbilanciati di quotazione. La fantamedia è stimata su poche giornate: è un'indicazione, non una certezza.</p>
+                <p class="text-[11px] text-slate-400">Scambi 1 contro 1 e multipli (2x1, 3x1, 1x2, 2x2) valutati sulla <b>formazione migliore</b> (fantamedia stimata, modulo Mantra più adatto) e sulle <b>riserve per ruolo</b> di entrambe le squadre. Mai sotto i 2 portieri, rose entro il massimo, esclusi gli scambi troppo sbilanciati di quotazione. La fantamedia è stimata su poche giornate: è un'indicazione, non una certezza.</p>
                 <div id="trades-summary" class="text-[11px] text-slate-300"></div>
             </div>
+            <div id="trades-pieces" class="grid lg:grid-cols-2 gap-4"></div>
             <div id="trades-groups" class="space-y-4"></div>
         </div>
 
@@ -2249,120 +2257,248 @@
         }
 
 
-        // --- Scambi consigliati (1 contro 1) ---
+        // --- Scambi consigliati (1x1 e multipli) ---
+        let _tradesCache = null;
+        let _tradesRun = 0;
+        const isGkP = p => (p.mantraRoles || []).includes('Por');
+        const MIN_GK = 2;
+        // Quanti giocatori di ogni ruolo possono servire al massimo in un modulo (es. Pc: 2)
+        const ROLE_DEMAND = Object.fromEntries(MANTRA_ROLES.map(r => [r, Math.max(...Object.values(MANTRA_MODULES).map(ms => ms.filter(sl => sl.split('/').includes(r)).length))]));
+        // Ruoli in esubero: più giocatori di quanti ne servono nel modulo più esigente, più una riserva
+        function surplusRoles(team) {
+            const cnt = {};
+            team.forEach(p => (p.mantraRoles || []).forEach(r => cnt[r] = (cnt[r] || 0) + 1));
+            return { cnt, surplus: new Set(MANTRA_ROLES.filter(r => r !== 'Por' && (cnt[r] || 0) > ROLE_DEMAND[r] + 1)) };
+        }
+        function combos(arr, k) {
+            const out = [];
+            const rec = (start, cur) => {
+                if (cur.length === k) { out.push(cur.slice()); return; }
+                for (let i = start; i < arr.length; i++) { cur.push(arr[i]); rec(i + 1, cur); cur.pop(); }
+            };
+            rec(0, []);
+            return out;
+        }
+
         function renderTrades() {
             const managers = getConfig().managers;
             const me = getMe();
-            const sel = document.getElementById('trades-me');
-            sel.innerHTML = managers.map(m => `<option value="${escapeHtml(m)}" ${m === me ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('');
-            const groupsBox = document.getElementById('trades-groups');
+            document.getElementById('trades-me').innerHTML = managers.map(m => `<option value="${escapeHtml(m)}" ${m === me ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('');
             const summary = document.getElementById('trades-summary');
-            if (!isMantra()) { summary.innerHTML = 'Gli scambi consigliati sono disponibili in modalità Mantra.'; groupsBox.innerHTML = ''; return; }
-            summary.innerHTML = '<span class="text-slate-400">Calcolo in corso…</span>';
-            groupsBox.innerHTML = '';
-            setTimeout(() => {
-                _valCache = { fm: new Map(), qt: new Map() };
-                try { drawTrades(computeTrades(me)); } finally { _valCache = null; }
-            }, 30);
+            document.getElementById('trades-groups').innerHTML = '';
+            document.getElementById('trades-pieces').innerHTML = '';
+            if (!isMantra()) { summary.innerHTML = 'Gli scambi consigliati sono disponibili in modalità Mantra.'; return; }
+            const run = ++_tradesRun;
+            const others = managers.filter(o => o !== me);
+            const results = [];
+            let ctx = null;
+            let i = 0;
+            // Un avversario alla volta, per non bloccare la pagina
+            const step = () => {
+                if (run !== _tradesRun) return;
+                _valCache = _valCache || { fm: new Map(), qt: new Map() };
+                try {
+                    if (!ctx) {
+                        ctx = tradeContext(me);
+                        if (!ctx) { summary.innerHTML = `${escapeHtml(me)} non ha ancora giocatori in rosa.`; _valCache = null; return; }
+                    }
+                    if (i < others.length) {
+                        summary.innerHTML = `<span class="text-slate-400">Calcolo in corso… ${i + 1}/${others.length} (${escapeHtml(others[i])})</span>`;
+                        results.push(...tradesWith(ctx, others[i]));
+                        i++;
+                        setTimeout(step, 0);
+                        return;
+                    }
+                    finishTrades(ctx, results);
+                    _tradesCache = { ctx, results };
+                } finally {
+                    if (i >= others.length || !ctx) _valCache = null;
+                }
+                drawTradesFromCache();
+            };
+            setTimeout(step, 30);
         }
 
-        function computeTrades(me) {
-            const withRoles = list => list.filter(p => p.mantraRoles && p.mantraRoles.length);
-            const mine = withRoles(getTeamStats(me).purchases);
-            if (!mine.length) return { me, mine, results: [] };
-            const myBase = bestFmLineup(mine);
-            const myGaps = benchGaps(mine).gaps;
-            const myRoles = new Set(mine.flatMap(p => p.mantraRoles));
-            const balanced = (a, b) => {
-                const qa = lineupValue(a), qb = lineupValue(b);
-                return Math.abs(qa - qb) <= 4 || Math.min(qa, qb) / Math.max(qa, qb) >= 0.6;
-            };
-            const results = [];
-            getConfig().managers.filter(o => o !== me).forEach(other => {
-                const theirs = withRoles(getTeamStats(other).purchases);
-                if (!theirs.length) return;
-                const thBase = bestFmLineup(theirs);
-                // Candidati da ricevere: chi entrerebbe nella mia formazione o porta un ruolo che non ho
-                const wanted = theirs.filter(b => {
-                    if (b.mantraRoles.some(r => !myRoles.has(r))) return true;
-                    const t = bestFmLineup([...mine, b]);
-                    return t.assign.includes(t.team.length - 1);
-                });
-                wanted.forEach(b => {
-                    mine.forEach(a => {
-                        if (!balanced(a, b)) return;
-                        const myAfterTeam = [...mine.filter(x => x !== a), b];
-                        const myAfter = bestFmLineup(myAfterTeam);
-                        const myDelta = myAfter.total - myBase.total;
-                        const myCovDelta = myAfter.covered - myBase.covered;
-                        if (myDelta < -0.2 && myCovDelta <= 0) return;
-                        const thAfter = bestFmLineup([...theirs.filter(x => x !== b), a]);
-                        const thDelta = thAfter.total - thBase.total;
-                        const thCovDelta = thAfter.covered - thBase.covered;
-                        const newRoles = b.mantraRoles.filter(r => !myRoles.has(r));
-                        const lostRoles = a.mantraRoles.filter(r => !myAfterTeam.some(x => x.mantraRoles.includes(r)));
-                        results.push({ a, b, other, myDelta, thDelta, myCovDelta, thCovDelta, myMod: myAfter.mod, newRoles, lostRoles, myAfterTeam });
+        // Analisi della mia rosa: titolari, giocatori indispensabili (unica riserva, portieri minimi) e pedine di scambio
+        function tradeContext(me) {
+            const mine = getTeamStats(me).purchases.filter(p => p.mantraRoles && p.mantraRoles.length);
+            if (!mine.length) return null;
+            const base = bestFmLineup(mine);
+            const gaps = benchGaps(mine).gaps;
+            const xi = new Set(base.assign.filter(i => i >= 0).map(i => base.team[i]));
+            const gk = mine.filter(isGkP).length;
+            const why = new Map();
+            mine.forEach(p => {
+                if (xi.has(p)) { why.set(p, 'titolare'); return; }
+                if (isGkP(p) && gk <= MIN_GK) { why.set(p, 'portiere necessario'); return; }
+                const g = benchGaps(mine.filter(x => x !== p)).gaps.filter(x => !gaps.includes(x));
+                if (g.length) why.set(p, 'unica riserva ' + g.join(', '));
+            });
+            const { cnt: roleCnt, surplus } = surplusRoles(mine);
+            const isSurplusP = p => p.mantraRoles.some(r => surplus.has(r));
+            // Pedine: prima chi ha un ruolo in esubero, poi per quotazione
+            const pieces = mine.filter(p => !why.has(p)).sort((a, b) => (isSurplusP(b) - isSurplusP(a)) || lineupValue(b) - lineupValue(a));
+            const xiWeak = [...xi].filter(p => !isGkP(p)).sort((a, b) => fmValue(a) - fmValue(b));
+            const roles = new Set(mine.flatMap(p => p.mantraRoles));
+            const cfg = { max: getTotalSlots(), min: getMinSlots() };
+            return { me, mine, base, gaps, xi, why, pieces, xiWeak, roles, cfg, roleCnt, surplus, isSurplusP, wantedAll: [] };
+        }
+
+        function tradesWith(ctx, other) {
+            const theirs = getTeamStats(other).purchases.filter(p => p.mantraRoles && p.mantraRoles.length);
+            if (!theirs.length) return [];
+            const thBase = bestFmLineup(theirs);
+            // Chi mi servirebbe davvero: entra nella mia formazione migliore (o porta un ruolo che non ho)
+            const onlySurplus = b => b.mantraRoles.every(r => ctx.surplus.has(r));
+            const wanted = theirs.filter(b => !onlySurplus(b)).map(b => {
+                const t = bestFmLineup([...ctx.mine, b]);
+                const enters = t.assign.includes(t.team.length - 1);
+                const newRole = b.mantraRoles.some(r => !ctx.roles.has(r));
+                return { b, gain: t.total - ctx.base.total, cov: t.covered - ctx.base.covered, enters, newRole };
+            }).filter(w => w.enters || w.newRole).sort((x, y) => y.gain - x.gain);
+            ctx.wantedAll.push(...wanted.filter(w => w.enters).map(w => ({ ...w, other })));
+            const getPool = wanted.slice(0, 6).map(w => w.b);
+            const givePool = [...new Set([...ctx.pieces.slice(0, 7), ...ctx.xiWeak.slice(0, 3)])];
+            const getSets = [...combos(getPool, 1), ...combos(getPool, 2)];
+            const giveSets = [...combos(givePool, 1), ...combos(givePool, 2), ...combos(givePool, 3)];
+            const allowed = (g, r) => (g === 1 && r === 1) || (g === 2 && r === 1) || (g === 3 && r === 1) || (g === 1 && r === 2) || (g === 2 && r === 2);
+            const sumQ = list => list.reduce((a, p) => a + lineupValue(p), 0);
+            const myGk = ctx.mine.filter(isGkP).length, thGk = theirs.filter(isGkP).length;
+            const out = [];
+            getSets.forEach(get => {
+                const qGet = sumQ(get);
+                giveSets.forEach(give => {
+                    if (!allowed(give.length, get.length)) return;
+                    const qGive = sumQ(give);
+                    if (Math.abs(qGive - qGet) > 4 && Math.min(qGive, qGet) / Math.max(qGive, qGet) < 0.65) return;
+                    // Portieri: nessuno dei due scende sotto il minimo
+                    const gkOut = give.filter(isGkP).length, gkIn = get.filter(isGkP).length;
+                    if (myGk - gkOut + gkIn < Math.min(myGk, MIN_GK) || thGk - gkIn + gkOut < Math.min(thGk, MIN_GK)) return;
+                    // Numero di giocatori: entro il massimo, e chi era sopra il minimo non ci scende sotto
+                    const myN = ctx.mine.length - give.length + get.length, thN = theirs.length - get.length + give.length;
+                    if (myN > ctx.cfg.max || thN > ctx.cfg.max) return;
+                    if ((ctx.mine.length >= ctx.cfg.min && myN < ctx.cfg.min) || (theirs.length >= ctx.cfg.min && thN < ctx.cfg.min)) return;
+                    const myTeam = [...ctx.mine.filter(x => !give.includes(x)), ...get];
+                    const myAfter = bestFmLineup(myTeam);
+                    const myDelta = myAfter.total - ctx.base.total;
+                    const myCovDelta = myAfter.covered - ctx.base.covered;
+                    if (myDelta < 0.2 && myCovDelta <= 0) return;
+                    const thTeam = [...theirs.filter(x => !get.includes(x)), ...give];
+                    const thAfter = bestFmLineup(thTeam);
+                    out.push({
+                        give, get, other, myTeam, myDelta, myCovDelta, myMod: myAfter.mod,
+                        thDelta: thAfter.total - thBase.total, thCovDelta: thAfter.covered - thBase.covered,
+                        newRoles: [...new Set(get.flatMap(p => p.mantraRoles))].filter(r => !ctx.roles.has(r)),
+                        lostRoles: [...new Set(give.flatMap(p => p.mantraRoles))].filter(r => !myTeam.some(x => x.mantraRoles.includes(r))),
+                        size: give.length + get.length,
+                        surplusOut: give.filter(ctx.isSurplusP).flatMap(p => p.mantraRoles.filter(r => ctx.surplus.has(r)))
                     });
                 });
             });
-            // Riserve: solo per i candidati più promettenti (calcolo più costoso)
-            results.sort((x, y) => y.myDelta - x.myDelta);
-            results.slice(0, 150).forEach(r => {
-                const g = benchGaps(r.myAfterTeam).gaps;
-                r.fixedGaps = myGaps.filter(x => !g.includes(x));
-            });
-            return { me, mine, myBase, myGaps, results };
+            return out;
         }
 
-        function drawTrades(data) {
+        function finishTrades(ctx, results) {
+            // Riserve (calcolo più costoso) solo per i candidati migliori
+            // I migliori di ogni tipo (1x1, 2x1, 1x2, ...) e di ogni avversario, così nessun tipo resta fuori
+            results.sort((x, y) => y.myDelta - x.myDelta);
+            const perKey = {};
+            results.filter(r => {
+                const k = r.give.length + 'x' + r.get.length + '|' + r.other;
+                perKey[k] = (perKey[k] || 0) + 1;
+                return perKey[k] <= 25;
+            }).forEach(r => {
+                const g = benchGaps(r.myTeam).gaps;
+                r.fixedGaps = ctx.gaps.filter(x => !g.includes(x));
+                r.newGaps = g.filter(x => !ctx.gaps.includes(x));
+            });
+            results.forEach(r => {
+                // Bonus per chi cede giocatori di ruoli in esubero
+                const surplusGiven = r.give.filter(ctx.isSurplusP).length;
+                r.score = r.myDelta - 0.6 * ((r.newGaps || []).length) - 0.05 * (r.size - 2) + 0.3 * surplusGiven;
+            });
+        }
+
+        function drawTradesFromCache() {
+            if (!_tradesCache) return;
+            const { ctx } = _tradesCache;
+            const kind = (document.getElementById('trades-kind') || {}).value || 'all';
+            const R = _tradesCache.results.filter(r => r.fixedGaps && (kind === 'all' || (kind === '1' ? r.size === 2 : r.size > 2)));
             const summary = document.getElementById('trades-summary');
-            const box = document.getElementById('trades-groups');
-            if (!data.mine.length) { summary.innerHTML = `${escapeHtml(data.me)} non ha ancora giocatori in rosa.`; box.innerHTML = ''; return; }
-            summary.innerHTML = `La tua formazione migliore: <b class="text-white">${data.myBase.mod}</b> · ${data.myBase.covered}/11 posizioni · fantamedia stimata totale <b class="text-white">${fm2(data.myBase.total)}</b>${data.myGaps.length ? ` · senza riserva: <b class="text-red-300">${data.myGaps.join(', ')}</b>` : ' · panchina coperta'}`;
-            const R = data.results;
+            summary.innerHTML = `La tua formazione migliore: <b class="text-white">${ctx.base.mod}</b> · ${ctx.base.covered}/11 posizioni · fantamedia stimata totale <b class="text-white">${fm2(ctx.base.total)}</b>${ctx.gaps.length ? ` · senza riserva: <b class="text-red-300">${ctx.gaps.join(', ')}</b>` : ' · panchina coperta'}${ctx.surplus.size ? ` · ruoli in esubero: <b class="text-amber-300">${[...ctx.surplus].map(r => `${r} (${ctx.roleCnt[r]}, ne servono al massimo ${ROLE_DEMAND[r]} + 1 riserva)`).join(', ')}</b> → non ti propongo altri giocatori solo di questi ruoli` : ''}`;
+
+            // Pedine di scambio e giocatori che ti servirebbero
+            const mini = (p, extra) => {
+                const f = fmFor(listoneOfPurchase(p) || p);
+                return `<div class="flex items-center gap-1.5 bg-slate-800/70 border border-slate-700/60 rounded-lg px-1.5 py-1 text-[11px]">
+                    ${playerPhotoHtml(p, 'xs')}<span class="font-bold text-white truncate">${escapeHtml(p.player)}</span>${roleBadgesHtml(p)}
+                    <span class="text-[10px] text-slate-400 ml-auto whitespace-nowrap">FM ${f ? fm2(f.fm) : '-'} · Qt ${lineupValue(p)}${extra ? ' · ' + extra : ''}</span></div>`;
+            };
+            const wanted = [];
+            const seenW = new Set();
+            ctx.wantedAll.sort((x, y) => y.gain - x.gain).forEach(w => { if (!seenW.has(w.b) && wanted.length < 10) { seenW.add(w.b); wanted.push(w); } });
+            const keep = ctx.mine.filter(p => ctx.why.has(p) && !ctx.xi.has(p));
+            document.getElementById('trades-pieces').innerHTML = `
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-2">
+                    <h3 class="text-sm font-bold text-white flex items-center gap-2"><i data-lucide="repeat" class="ico w-4 h-4 text-amber-300"></i> Le tue pedine di scambio <span class="text-[11px] font-normal text-slate-400">fuori dalla formazione migliore e non indispensabili come riserva</span></h3>
+                    <div class="grid sm:grid-cols-2 gap-1">${ctx.pieces.map(p => mini(p, ctx.isSurplusP(p) ? '<span class="text-amber-300">esubero</span>' : '')).join('') || '<p class="text-[11px] text-slate-500 italic">Nessuna: ogni giocatore ti serve.</p>'}</div>
+                    ${keep.length ? `<div class="text-[10px] text-slate-400 pt-1">Da tenere (non titolari ma necessari): ${keep.map(p => `<b class="text-slate-200">${escapeHtml(p.player)}</b> (${ctx.why.get(p)})`).join(', ')}</div>` : ''}
+                </div>
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-2">
+                    <h3 class="text-sm font-bold text-white flex items-center gap-2"><i data-lucide="target" class="ico w-4 h-4 text-emerald-300"></i> Ti servirebbero <span class="text-[11px] font-normal text-slate-400">giocatori degli altri che entrerebbero nella tua formazione migliore</span></h3>
+                    <div class="grid sm:grid-cols-2 gap-1">${wanted.map(w => mini(w.b, `<span class="text-emerald-300">${w.cov > 0 ? '+1 posizione' : '+' + fm2(w.gain)}</span> · ${escapeHtml(w.other)}`)).join('') || '<p class="text-[11px] text-slate-500 italic">Nessuno.</p>'}</div>
+                </div>`;
+
             const used = new Set();
             const pick = (list, n) => {
-                const out = [], perA = {}, perB = new Set();
+                const out = [], perGive = {}, getSeen = new Set();
                 for (const r of list) {
-                    const k = r.a.id + '|' + r.b.id;
-                    if (used.has(k) || perB.has(r.b) || (perA[r.a.id] || 0) >= 2) continue;
-                    out.push(r); used.add(k); perB.add(r.b); perA[r.a.id] = (perA[r.a.id] || 0) + 1;
+                    const gk = r.get.map(p => p.id).sort().join(',');
+                    const k = r.give.map(p => p.id).sort().join(',') + '>' + gk;
+                    if (used.has(k) || getSeen.has(gk)) continue;
+                    if (r.give.some(p => (perGive[p.id] || 0) >= 2)) continue;
+                    out.push(r); used.add(k); getSeen.add(gk);
+                    r.give.forEach(p => perGive[p.id] = (perGive[p.id] || 0) + 1);
                     if (out.length >= n) break;
                 }
                 return out;
             };
-            const both = pick(R.filter(r => r.myDelta >= 0.25 && r.thDelta >= -0.05).sort((x, y) => (y.myDelta + y.thDelta) - (x.myDelta + x.thDelta)), 8);
-            const role = pick(R.filter(r => r.fixedGaps && (r.fixedGaps.length || r.newRoles.length || r.myCovDelta > 0) && r.myDelta >= -0.2)
-                .sort((x, y) => ((y.fixedGaps.length + y.newRoles.length + 2 * y.myCovDelta) - (x.fixedGaps.length + x.newRoles.length + 2 * x.myCovDelta)) || y.myDelta - x.myDelta), 8);
-            const steal = pick(R.filter(r => r.myDelta >= 0.5 && r.thDelta < -0.05 && r.thDelta >= -1.5).sort((x, y) => y.myDelta - x.myDelta), 8);
+            const both = pick(R.filter(r => r.score >= 0.25 && r.thDelta >= -0.05 && r.thCovDelta >= 0).sort((x, y) => (y.score + y.thDelta) - (x.score + x.thDelta)), 8);
+            const role = pick(R.filter(r => (r.fixedGaps.length || r.newRoles.length || r.myCovDelta > 0) && r.score >= -0.2)
+                .sort((x, y) => ((y.fixedGaps.length + y.newRoles.length + 2 * y.myCovDelta) - (x.fixedGaps.length + x.newRoles.length + 2 * x.myCovDelta)) || y.score - x.score), 8);
+            const steal = pick(R.filter(r => r.score >= 0.5 && (r.thDelta < -0.05 || r.thCovDelta < 0) && r.thDelta >= -2).sort((x, y) => y.score - x.score), 8);
+
+            const chip = (txt, cls) => `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md ${cls}">${txt}</span>`;
+            const sign = d => (d >= 0 ? '+' : '') + fm2(d);
+            // Se cambia il numero di posizioni coperte, la differenza di fantamedia non è confrontabile: si mostra quella
+            const effect = (cov, d) => cov ? `${cov > 0 ? '+' : ''}${cov} posizion${Math.abs(cov) === 1 ? 'e' : 'i'} in formazione` : `${sign(d)} FM formazione`;
+            const plRow = p => {
+                const f = fmFor(listoneOfPurchase(p) || p);
+                const tag = ctx.why.get(p);
+                return `<div class="flex items-center gap-2 min-w-0">
+                    ${playerPhotoHtml(p, 'sm')}
+                    <div class="min-w-0">
+                        <div class="font-bold text-white truncate text-xs">${escapeHtml(p.player)} <span class="text-slate-400 font-normal text-[10px]">${escapeHtml(p.club || '')}</span></div>
+                        <div class="flex items-center gap-1 flex-wrap">${roleBadgesHtml(p)}<span class="text-[10px] text-slate-400">FM ${f ? fm2(f.fm) : '-'} · Qt ${lineupValue(p)}${tag ? ' · <span class="text-amber-300">' + tag + '</span>' : ''}</span></div>
+                    </div>
+                </div>`;
+            };
             const card = r => {
-                const side = (p, label, cls) => {
-                    const f = fmFor(listoneOfPurchase(p) || p);
-                    return `<div class="flex items-center gap-2 min-w-0 flex-1">
-                        ${playerPhotoHtml(p, 'md')}
-                        <div class="min-w-0">
-                            <div class="text-[9px] uppercase font-extrabold tracking-wider ${cls}">${label}</div>
-                            <div class="font-bold text-white truncate">${escapeHtml(p.player)} <span class="text-slate-400 font-normal text-[10px]">${escapeHtml(p.club || '')}</span></div>
-                            <div class="flex items-center gap-1 flex-wrap">${roleBadgesHtml(p)}<span class="text-[10px] text-slate-400">FM ${f ? fm2(f.fm) : '-'} · Qt ${lineupValue(p)} · pagato ${p.price}€</span></div>
-                        </div>
-                    </div>`;
-                };
-                const chip = (txt, cls) => `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md ${cls}">${txt}</span>`;
-                const sign = d => (d >= 0 ? '+' : '') + fm2(d);
-                // Se cambia il numero di posizioni coperte, la differenza di fantamedia non è confrontabile: si mostra quella
-                const effect = (cov, d) => cov ? `${cov > 0 ? '+' : ''}${cov} posizion${Math.abs(cov) === 1 ? 'e' : 'i'} in formazione` : `${sign(d)} FM formazione`;
                 const chips = [
-                    chip(`Tu: ${effect(r.myCovDelta, r.myDelta)}${r.myMod !== data.myBase.mod ? ' · ' + r.myMod : ''}`, r.myDelta > 0.05 ? 'bg-emerald-900/60 text-emerald-200' : 'bg-slate-800 text-slate-300'),
-                    chip(`${escapeHtml(r.other)}: ${effect(r.thCovDelta, r.thDelta)}`, r.thDelta >= -0.05 ? 'bg-sky-900/60 text-sky-200' : 'bg-red-950/60 text-red-200'),
+                    chip(`${r.give.length}x${r.get.length}`, 'bg-slate-700 text-slate-200'),
+                    chip(`Tu: ${effect(r.myCovDelta, r.myDelta)}${r.myMod !== ctx.base.mod ? ' · ' + r.myMod : ''}`, r.myDelta > 0.05 ? 'bg-emerald-900/60 text-emerald-200' : 'bg-slate-800 text-slate-300'),
+                    chip(`${escapeHtml(r.other)}: ${effect(r.thCovDelta, r.thDelta)}`, r.thDelta >= -0.05 && r.thCovDelta >= 0 ? 'bg-sky-900/60 text-sky-200' : 'bg-red-950/60 text-red-200'),
                     r.newRoles.length ? chip(`Nuovo ruolo: ${r.newRoles.join(', ')}`, 'bg-violet-900/60 text-violet-200') : '',
-                    r.fixedGaps && r.fixedGaps.length ? chip(`Riserva per: ${r.fixedGaps.join(', ')}`, 'bg-violet-900/60 text-violet-200') : '',
-                    r.lostRoles.length ? chip(`Perdi il ruolo: ${r.lostRoles.join(', ')}`, 'bg-amber-900/60 text-amber-200') : ''
+                    r.fixedGaps.length ? chip(`Riserva per: ${r.fixedGaps.join(', ')}`, 'bg-violet-900/60 text-violet-200') : '',
+                    r.newGaps.length ? chip(`Resti senza riserva: ${r.newGaps.join(', ')}`, 'bg-amber-900/60 text-amber-200') : '',
+                    r.lostRoles.length ? chip(`Perdi il ruolo: ${r.lostRoles.join(', ')}`, 'bg-amber-900/60 text-amber-200') : '',
+                    r.surplusOut.length ? chip(`Cedi un esubero: ${[...new Set(r.surplusOut)].join(', ')}`, 'bg-teal-900/60 text-teal-200') : ''
                 ].join('');
                 return `<div class="bg-slate-800/60 border border-slate-700/60 rounded-xl p-2.5 space-y-2">
-                    <div class="flex items-center gap-2">
-                        ${side(r.a, 'Dai', 'text-red-300')}
-                        <i data-lucide="arrow-left-right" class="ico w-4 h-4 text-slate-500 flex-shrink-0"></i>
-                        ${side(r.b, 'Ricevi da ' + escapeHtml(r.other), 'text-emerald-300')}
+                    <div class="grid grid-cols-[1fr_auto_1fr] gap-2 items-center">
+                        <div class="space-y-1"><div class="text-[9px] uppercase font-extrabold tracking-wider text-red-300">Dai</div>${r.give.map(plRow).join('')}</div>
+                        <i data-lucide="arrow-left-right" class="ico w-4 h-4 text-slate-500"></i>
+                        <div class="space-y-1"><div class="text-[9px] uppercase font-extrabold tracking-wider text-emerald-300">Ricevi da ${escapeHtml(r.other)}</div>${r.get.map(plRow).join('')}</div>
                     </div>
                     <div class="flex flex-wrap gap-1">${chips}</div>
                 </div>`;
@@ -2372,7 +2508,7 @@
                     <h3 class="text-sm font-bold text-white flex items-center gap-2"><i data-lucide="${icon}" class="ico w-4 h-4 text-indigo-300"></i> ${title} <span class="text-[11px] font-normal text-slate-400">${desc}</span></h3>
                     ${list.length ? `<div class="grid lg:grid-cols-2 gap-2">${list.map(card).join('')}</div>` : `<p class="text-[11px] text-slate-500 italic">${empty}</p>`}
                 </div>`;
-            box.innerHTML =
+            document.getElementById('trades-groups').innerHTML =
                 group('Conviene a entrambi', 'handshake', 'tu migliori e l\'altro non ci perde: i più facili da proporre', both, 'Nessuno scambio vantaggioso per entrambi con le rose attuali.') +
                 group('Ti serve per il ruolo', 'puzzle', 'coprono una posizione scoperta, un ruolo che non hai o una riserva mancante', role, 'Nessuno scambio che migliori la copertura dei ruoli.') +
                 group('Colpo per te', 'trending-up', 'migliori molto, ma l\'altro ci perde: magari da proporre aggiungendo crediti', steal, 'Nessun colpo evidente con le rose attuali.');
