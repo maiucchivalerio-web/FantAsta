@@ -219,6 +219,7 @@
             <button id="nav-free-agents" onclick="switchTab('free-agents')" class="nav-tab"><i data-lucide="list-checks" class="w-4 h-4"></i>Listone & Note</button>
             <button id="nav-gk-grid" onclick="switchTab('gk-grid')" class="nav-tab"><i data-lucide="calendar-range" class="w-4 h-4"></i>Griglia & Consigliati</button>
             <button id="nav-teams" onclick="switchTab('teams')" class="nav-tab"><i data-lucide="users" class="w-4 h-4"></i>Rose</button>
+            <button id="nav-trades" onclick="switchTab('trades')" class="nav-tab"><i data-lucide="arrow-left-right" class="w-4 h-4"></i>Scambi</button>
             <button id="nav-clubs" onclick="switchTab('clubs')" class="nav-tab"><i data-lucide="shield" class="w-4 h-4"></i>Guida Squadre</button>
             <button id="nav-stats" onclick="switchTab('stats')" class="nav-tab"><i data-lucide="chart-column" class="w-4 h-4"></i>Statistiche</button>
         </nav>
@@ -551,6 +552,21 @@
                 <div id="clubs-picker" class="grid grid-cols-4 sm:grid-cols-5 lg:grid-cols-10 gap-1.5"></div>
             </div>
             <div id="club-detail" class="grid grid-cols-1 lg:grid-cols-5 gap-4 items-start"></div>
+        </div>
+
+        <!-- SCAMBI CONSIGLIATI -->
+        <div id="view-trades" class="hidden space-y-4 pb-4">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-2">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <h2 class="text-sm font-bold text-white flex items-center gap-2"><i data-lucide="arrow-left-right" class="ico w-4 h-4 text-emerald-300"></i> Scambi consigliati</h2>
+                    <label class="text-[11px] text-slate-400 flex items-center gap-1.5">Io sono
+                        <select id="trades-me" onchange="setMe(this.value)" class="bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1 text-xs text-white font-bold"></select>
+                    </label>
+                </div>
+                <p class="text-[11px] text-slate-400">Scambi uno contro uno con gli altri partecipanti, valutati sulla <b>formazione migliore</b> (fantamedia stimata, modulo Mantra più adatto) e sulle <b>riserve per ruolo</b> di entrambe le squadre. Esclusi gli scambi troppo sbilanciati di quotazione. La fantamedia è stimata su poche giornate: è un'indicazione, non una certezza.</p>
+                <div id="trades-summary" class="text-[11px] text-slate-300"></div>
+            </div>
+            <div id="trades-groups" class="space-y-4"></div>
         </div>
 
         <!-- TAB 5: STATISTICHE -->
@@ -1729,7 +1745,7 @@
         }
 
         function switchTab(tab) {
-            ['auction', 'free-agents', 'gk-grid', 'teams', 'clubs', 'stats'].forEach(t => {
+            ['auction', 'free-agents', 'gk-grid', 'teams', 'trades', 'clubs', 'stats'].forEach(t => {
                 document.getElementById('view-' + t).classList.add('hidden');
                 document.getElementById('nav-' + t).classList.remove('tab-active');
             });
@@ -1741,6 +1757,7 @@
             if (tab === 'teams') renderFullTeamsTable();
             if (tab === 'stats') renderStats();
             if (tab === 'clubs') renderClubs();
+            if (tab === 'trades') renderTrades();
         }
 
         function importListoneFile(event) {
@@ -2050,6 +2067,12 @@
 
         // Quotazione da usare per scegliere i titolari: Qt Mantra del listone, poi Qt classica, FVM o prezzo pagato
         function lineupValue(p) {
+            if (_valCache && _valCache.qt.has(p)) return _valCache.qt.get(p);
+            const v = lineupValueRaw(p);
+            if (_valCache) _valCache.qt.set(p, v);
+            return v;
+        }
+        function lineupValueRaw(p) {
             const id = resolvePlayerId(p);
             const name = (p.player || p.name || '').toLowerCase();
             const all = [...(getFaseObj('settembre').listone || []), ...(getFaseObj('riparazione').listone || [])];
@@ -2109,7 +2132,14 @@
             return all.find(x => (id && String(x.id) === String(id))) || all.find(x => x.name.toLowerCase() === name && x.club === p.club) || null;
         }
         // Valore per la formazione: fantamedia stimata, avvicinata a 6 se ha giocato meno di 3 partite (6 se non ci sono dati)
+        let _valCache = null; // attivo solo durante calcoli pesanti (scambi)
         function fmValue(p) {
+            if (_valCache && _valCache.fm.has(p)) return _valCache.fm.get(p);
+            const v = fmValueRaw(p);
+            if (_valCache) _valCache.fm.set(p, v);
+            return v;
+        }
+        function fmValueRaw(p) {
             const lp = listoneOfPurchase(p);
             const f = lp && fmFor(lp);
             if (!f) return 6;
@@ -2165,6 +2195,7 @@
             try { localStorage.setItem('fantasta_me', m); } catch (e) {}
             renderPlayerSpotlight();
             renderDualRoles();
+            if (!document.getElementById('view-trades').classList.contains('hidden')) renderTrades();
         }
         const fm2 = x => x.toFixed(2).replace('.', ',');
         function impactHtml(p) {
@@ -2215,6 +2246,136 @@
             // Solo i veri multiruolo: 3+ ruoli, oppure 2 ruoli che aprono almeno 5 tipi di posizione
             if (p.mantraRoles.length < 3 && v.slots.length < 5) return '';
             return `<span class="ml-1 text-[9px] font-black px-1.5 py-0.5 rounded bg-violet-900/70 text-violet-200" title="Multiruolo: può giocare in ${v.slots.length} tipi di posizione dei moduli Mantra (${v.slots.join(', ')})">Jolly ×${v.slots.length}</span>`;
+        }
+
+
+        // --- Scambi consigliati (1 contro 1) ---
+        function renderTrades() {
+            const managers = getConfig().managers;
+            const me = getMe();
+            const sel = document.getElementById('trades-me');
+            sel.innerHTML = managers.map(m => `<option value="${escapeHtml(m)}" ${m === me ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('');
+            const groupsBox = document.getElementById('trades-groups');
+            const summary = document.getElementById('trades-summary');
+            if (!isMantra()) { summary.innerHTML = 'Gli scambi consigliati sono disponibili in modalità Mantra.'; groupsBox.innerHTML = ''; return; }
+            summary.innerHTML = '<span class="text-slate-400">Calcolo in corso…</span>';
+            groupsBox.innerHTML = '';
+            setTimeout(() => {
+                _valCache = { fm: new Map(), qt: new Map() };
+                try { drawTrades(computeTrades(me)); } finally { _valCache = null; }
+            }, 30);
+        }
+
+        function computeTrades(me) {
+            const withRoles = list => list.filter(p => p.mantraRoles && p.mantraRoles.length);
+            const mine = withRoles(getTeamStats(me).purchases);
+            if (!mine.length) return { me, mine, results: [] };
+            const myBase = bestFmLineup(mine);
+            const myGaps = benchGaps(mine).gaps;
+            const myRoles = new Set(mine.flatMap(p => p.mantraRoles));
+            const balanced = (a, b) => {
+                const qa = lineupValue(a), qb = lineupValue(b);
+                return Math.abs(qa - qb) <= 4 || Math.min(qa, qb) / Math.max(qa, qb) >= 0.6;
+            };
+            const results = [];
+            getConfig().managers.filter(o => o !== me).forEach(other => {
+                const theirs = withRoles(getTeamStats(other).purchases);
+                if (!theirs.length) return;
+                const thBase = bestFmLineup(theirs);
+                // Candidati da ricevere: chi entrerebbe nella mia formazione o porta un ruolo che non ho
+                const wanted = theirs.filter(b => {
+                    if (b.mantraRoles.some(r => !myRoles.has(r))) return true;
+                    const t = bestFmLineup([...mine, b]);
+                    return t.assign.includes(t.team.length - 1);
+                });
+                wanted.forEach(b => {
+                    mine.forEach(a => {
+                        if (!balanced(a, b)) return;
+                        const myAfterTeam = [...mine.filter(x => x !== a), b];
+                        const myAfter = bestFmLineup(myAfterTeam);
+                        const myDelta = myAfter.total - myBase.total;
+                        const myCovDelta = myAfter.covered - myBase.covered;
+                        if (myDelta < -0.2 && myCovDelta <= 0) return;
+                        const thAfter = bestFmLineup([...theirs.filter(x => x !== b), a]);
+                        const thDelta = thAfter.total - thBase.total;
+                        const thCovDelta = thAfter.covered - thBase.covered;
+                        const newRoles = b.mantraRoles.filter(r => !myRoles.has(r));
+                        const lostRoles = a.mantraRoles.filter(r => !myAfterTeam.some(x => x.mantraRoles.includes(r)));
+                        results.push({ a, b, other, myDelta, thDelta, myCovDelta, thCovDelta, myMod: myAfter.mod, newRoles, lostRoles, myAfterTeam });
+                    });
+                });
+            });
+            // Riserve: solo per i candidati più promettenti (calcolo più costoso)
+            results.sort((x, y) => y.myDelta - x.myDelta);
+            results.slice(0, 150).forEach(r => {
+                const g = benchGaps(r.myAfterTeam).gaps;
+                r.fixedGaps = myGaps.filter(x => !g.includes(x));
+            });
+            return { me, mine, myBase, myGaps, results };
+        }
+
+        function drawTrades(data) {
+            const summary = document.getElementById('trades-summary');
+            const box = document.getElementById('trades-groups');
+            if (!data.mine.length) { summary.innerHTML = `${escapeHtml(data.me)} non ha ancora giocatori in rosa.`; box.innerHTML = ''; return; }
+            summary.innerHTML = `La tua formazione migliore: <b class="text-white">${data.myBase.mod}</b> · ${data.myBase.covered}/11 posizioni · fantamedia stimata totale <b class="text-white">${fm2(data.myBase.total)}</b>${data.myGaps.length ? ` · senza riserva: <b class="text-red-300">${data.myGaps.join(', ')}</b>` : ' · panchina coperta'}`;
+            const R = data.results;
+            const used = new Set();
+            const pick = (list, n) => {
+                const out = [], perA = {}, perB = new Set();
+                for (const r of list) {
+                    const k = r.a.id + '|' + r.b.id;
+                    if (used.has(k) || perB.has(r.b) || (perA[r.a.id] || 0) >= 2) continue;
+                    out.push(r); used.add(k); perB.add(r.b); perA[r.a.id] = (perA[r.a.id] || 0) + 1;
+                    if (out.length >= n) break;
+                }
+                return out;
+            };
+            const both = pick(R.filter(r => r.myDelta >= 0.25 && r.thDelta >= -0.05).sort((x, y) => (y.myDelta + y.thDelta) - (x.myDelta + x.thDelta)), 8);
+            const role = pick(R.filter(r => r.fixedGaps && (r.fixedGaps.length || r.newRoles.length || r.myCovDelta > 0) && r.myDelta >= -0.2)
+                .sort((x, y) => ((y.fixedGaps.length + y.newRoles.length + 2 * y.myCovDelta) - (x.fixedGaps.length + x.newRoles.length + 2 * x.myCovDelta)) || y.myDelta - x.myDelta), 8);
+            const steal = pick(R.filter(r => r.myDelta >= 0.5 && r.thDelta < -0.05 && r.thDelta >= -1.5).sort((x, y) => y.myDelta - x.myDelta), 8);
+            const card = r => {
+                const side = (p, label, cls) => {
+                    const f = fmFor(listoneOfPurchase(p) || p);
+                    return `<div class="flex items-center gap-2 min-w-0 flex-1">
+                        ${playerPhotoHtml(p, 'md')}
+                        <div class="min-w-0">
+                            <div class="text-[9px] uppercase font-extrabold tracking-wider ${cls}">${label}</div>
+                            <div class="font-bold text-white truncate">${escapeHtml(p.player)} <span class="text-slate-400 font-normal text-[10px]">${escapeHtml(p.club || '')}</span></div>
+                            <div class="flex items-center gap-1 flex-wrap">${roleBadgesHtml(p)}<span class="text-[10px] text-slate-400">FM ${f ? fm2(f.fm) : '-'} · Qt ${lineupValue(p)} · pagato ${p.price}€</span></div>
+                        </div>
+                    </div>`;
+                };
+                const chip = (txt, cls) => `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md ${cls}">${txt}</span>`;
+                const sign = d => (d >= 0 ? '+' : '') + fm2(d);
+                // Se cambia il numero di posizioni coperte, la differenza di fantamedia non è confrontabile: si mostra quella
+                const effect = (cov, d) => cov ? `${cov > 0 ? '+' : ''}${cov} posizion${Math.abs(cov) === 1 ? 'e' : 'i'} in formazione` : `${sign(d)} FM formazione`;
+                const chips = [
+                    chip(`Tu: ${effect(r.myCovDelta, r.myDelta)}${r.myMod !== data.myBase.mod ? ' · ' + r.myMod : ''}`, r.myDelta > 0.05 ? 'bg-emerald-900/60 text-emerald-200' : 'bg-slate-800 text-slate-300'),
+                    chip(`${escapeHtml(r.other)}: ${effect(r.thCovDelta, r.thDelta)}`, r.thDelta >= -0.05 ? 'bg-sky-900/60 text-sky-200' : 'bg-red-950/60 text-red-200'),
+                    r.newRoles.length ? chip(`Nuovo ruolo: ${r.newRoles.join(', ')}`, 'bg-violet-900/60 text-violet-200') : '',
+                    r.fixedGaps && r.fixedGaps.length ? chip(`Riserva per: ${r.fixedGaps.join(', ')}`, 'bg-violet-900/60 text-violet-200') : '',
+                    r.lostRoles.length ? chip(`Perdi il ruolo: ${r.lostRoles.join(', ')}`, 'bg-amber-900/60 text-amber-200') : ''
+                ].join('');
+                return `<div class="bg-slate-800/60 border border-slate-700/60 rounded-xl p-2.5 space-y-2">
+                    <div class="flex items-center gap-2">
+                        ${side(r.a, 'Dai', 'text-red-300')}
+                        <i data-lucide="arrow-left-right" class="ico w-4 h-4 text-slate-500 flex-shrink-0"></i>
+                        ${side(r.b, 'Ricevi da ' + escapeHtml(r.other), 'text-emerald-300')}
+                    </div>
+                    <div class="flex flex-wrap gap-1">${chips}</div>
+                </div>`;
+            };
+            const group = (title, icon, desc, list, empty) => `
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-2">
+                    <h3 class="text-sm font-bold text-white flex items-center gap-2"><i data-lucide="${icon}" class="ico w-4 h-4 text-indigo-300"></i> ${title} <span class="text-[11px] font-normal text-slate-400">${desc}</span></h3>
+                    ${list.length ? `<div class="grid lg:grid-cols-2 gap-2">${list.map(card).join('')}</div>` : `<p class="text-[11px] text-slate-500 italic">${empty}</p>`}
+                </div>`;
+            box.innerHTML =
+                group('Conviene a entrambi', 'handshake', 'tu migliori e l\'altro non ci perde: i più facili da proporre', both, 'Nessuno scambio vantaggioso per entrambi con le rose attuali.') +
+                group('Ti serve per il ruolo', 'puzzle', 'coprono una posizione scoperta, un ruolo che non hai o una riserva mancante', role, 'Nessuno scambio che migliori la copertura dei ruoli.') +
+                group('Colpo per te', 'trending-up', 'migliori molto, ma l\'altro ci perde: magari da proporre aggiungendo crediti', steal, 'Nessun colpo evidente con le rose attuali.');
         }
 
         function openLineupModal(managerIdx, moduleName) {
