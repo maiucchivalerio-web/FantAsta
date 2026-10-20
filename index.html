@@ -3266,6 +3266,33 @@
             document.getElementById('input-player').focus();
         }
 
+        // Correzione di un acquisto già registrato (prezzo e, se serve, manager)
+        function editPurchase(id) {
+            const list = [...getFaseObj('settembre').purchases, ...(currentFase === 'riparazione' ? getFaseObj('riparazione').purchases : [])];
+            const pu = list.find(p => p.id === id);
+            if (!pu) return;
+            const priceTxt = prompt(`Correggi il prezzo di ${pu.player} (${pu.owner}):`, pu.price);
+            if (priceTxt === null) return;
+            const price = parseInt(priceTxt);
+            if (!price || price < 1) { alert('Prezzo non valido (almeno 1).'); return; }
+            const managers = getConfig().managers;
+            const ownerTxt = prompt(`Manager di ${pu.player} (lascia così se è giusto).\nManager: ${managers.join(', ')}`, pu.owner);
+            if (ownerTxt === null) return;
+            const owner = managers.find(m => m.toLowerCase() === ownerTxt.trim().toLowerCase());
+            if (!owner) { alert(`"${ownerTxt}" non è un manager di questa lega.`); return; }
+            const oldPrice = pu.price, oldOwner = pu.owner;
+            pu.price = price; pu.owner = owner;
+            const st = getTeamStats(owner);
+            const problems = [];
+            if (st.remaining < 0) problems.push(`${owner} andrebbe a ${st.remaining}€ di crediti residui`);
+            if (st.totalPlayers > st.totalSlots) problems.push(`${owner} avrebbe ${st.totalPlayers} giocatori (massimo ${st.totalSlots})`);
+            if (problems.length && !confirm(`Attenzione: ${problems.join(' e ')}.\n\nSalvare comunque la correzione?`)) {
+                pu.price = oldPrice; pu.owner = oldOwner;
+                return;
+            }
+            saveState();
+        }
+
         function deletePurchase(id) {
             // Elimina solo un acquisto "nativo" della fase corrente (non tocca l'archivio di Settembre durante la Riparazione:
             // per quello si usa releasePlayer, che tiene traccia dello svincolo invece di cancellare la storia).
@@ -3299,7 +3326,7 @@
                             </div>
                         </div>
                         <div class="flex items-center gap-1.5 flex-shrink-0">
-                            <span class="font-mono font-bold text-emerald-400 text-xs">${p.price}€</span>
+                            <button onclick="editPurchase(${p.id})" class="font-mono font-bold text-emerald-400 text-xs hover:underline decoration-dotted" title="Clicca per correggere prezzo o manager">${p.price}€</button>
                             <button onclick="deletePurchase(${p.id})" class="text-slate-500 hover:text-red-400 font-bold px-1 text-xs" title="Elimina">×</button>
                         </div>
                     </div>
@@ -3333,7 +3360,7 @@
                             <div class="text-[10px] text-slate-400 truncate mt-0.5">a <strong class="text-indigo-300">${ev.owner}</strong></div>
                         </div>
                         <div class="flex items-center gap-1.5 flex-shrink-0">
-                            <span class="font-mono font-bold text-emerald-400 text-xs">${ev.price}€</span>
+                            <button onclick="editPurchase(${ev.id})" class="font-mono font-bold text-emerald-400 text-xs hover:underline decoration-dotted" title="Clicca per correggere prezzo o manager">${ev.price}€</button>
                             <button onclick="deletePurchase(${ev.id})" class="text-slate-500 hover:text-red-400 font-bold px-1 text-xs" title="Elimina">×</button>
                         </div>
                     </div>`;
@@ -3906,7 +3933,7 @@
                                             ${mantra && player.mantraRoles ? `<span class="block mt-0.5">${roleBadgesHtml(player)}</span>` : ''}
                                         </span>
                                         <div class="flex items-center gap-1 pl-1 flex-shrink-0">
-                                            <span class="font-mono font-bold text-emerald-400">${player.price}€</span>
+                                            <button onclick="editPurchase(${player.id})" class="font-mono font-bold text-emerald-400 hover:underline decoration-dotted" title="Clicca per correggere prezzo o manager">${player.price}€</button>
                                             ${actionBtn}
                                         </div>
                                     </div>
