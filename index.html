@@ -202,7 +202,7 @@
                     </summary>
                     <div class="absolute right-0 mt-1.5 w-60 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-1 z-50">
                         <button onclick="closeExportMenu(); exportToCSV()" class="menu-item"><i data-lucide="table" class="w-4 h-4 text-emerald-400"></i><span><b>Rose complete</b><br><span class="text-[10px] text-slate-400">CSV per Excel con riepilogo crediti</span></span></button>
-                        <button onclick="closeExportMenu(); exportForLegheFantacalcio()" class="menu-item"><i data-lucide="upload" class="w-4 h-4 text-teal-400"></i><span><b>Per Leghe Fantacalcio</b><br><span class="text-[10px] text-slate-400">Id, ruolo, nome, squadra, prezzo</span></span></button>
+                        <button onclick="closeExportMenu(); exportForLegheFantacalcio()" class="menu-item"><i data-lucide="upload" class="w-4 h-4 text-teal-400"></i><span><b>Per Leghe Fantacalcio</b><br><span class="text-[10px] text-slate-400">File per "Importa rose": squadra,id,costo</span></span></button>
                         <button onclick="closeExportMenu(); downloadBackupNow()" class="menu-item"><i data-lucide="hard-drive-download" class="w-4 h-4 text-amber-400"></i><span><b>Backup completo</b><br><span class="text-[10px] text-slate-400">Tutti i dati in un file, ripristinabile</span></span></button>
                         <button onclick="closeExportMenu(); openBackupModal()" class="menu-item"><i data-lucide="history" class="w-4 h-4 text-sky-400"></i><span><b>Copie di sicurezza</b><br><span class="text-[10px] text-slate-400">Ultime copie automatiche e ripristino</span></span></button>
                     </div>
@@ -4058,16 +4058,28 @@
         // Export generico (Ruolo, Nome, Squadra, Fantasquadra, Prezzo) pensato per essere adattato
         // all'importazione rose di piattaforme come Leghe Fantacalcio. Il formato esatto richiesto da
         // ogni piattaforma non è documentato pubblicamente: verifica le prime righe prima di caricarlo.
+        // Formato richiesto da Leghe Fantacalcio (Gestione Rose > Importa rose):
+        // una riga per calciatore "squadra,id,costo", senza intestazione, separata da virgole
         function exportForLegheFantacalcio() {
             const purchases = getEffectivePurchases();
             if (purchases.length === 0) { alert("Nessun acquisto da esportare in questa fase."); return; }
-            const mantra = isMantra();
-            const rows = [['Id', 'Ruolo', 'Nome', 'Squadra', 'Fantasquadra', 'Prezzo']];
-            purchases.forEach(p => {
-                const ruolo = mantra && p.mantraRoles ? p.mantraRoles.join(';') : p.role;
-                rows.push([p.playerId || '', ruolo, p.player, p.club, p.owner, p.price]);
+            const managers = getConfig().managers;
+            const sorted = purchases.slice().sort((a, b) => managers.indexOf(a.owner) - managers.indexOf(b.owner));
+            const missing = [];
+            const lines = [];
+            sorted.forEach(p => {
+                const id = resolvePlayerId(p);
+                if (!id) { missing.push(`${p.player} (${p.owner})`); return; }
+                lines.push([String(p.owner).replace(/,/g, ' ').trim(), id, p.price].join(','));
             });
-            downloadCsv(rows, `${exportFileBase()}_per-LegheFC.csv`);
+            if (missing.length && !confirm(`Questi giocatori non hanno l'Id di Fantacalcio.it e NON saranno nel file (vanno aggiunti a mano su Leghe):\n\n${missing.join('\n')}\n\nScaricare comunque il file con gli altri ${lines.length}?`)) return;
+            const blob = new Blob([lines.join('\r\n') + '\r\n'], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${exportFileBase()}_per-LegheFC.csv`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
         }
 
         function renderAll() {
